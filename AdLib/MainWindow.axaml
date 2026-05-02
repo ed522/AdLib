@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
+        x:Class="AdLib.MainWindow"
+        Title="AdLib">
+    
+    <Grid ColumnDefinitions="192,288" 
+          HorizontalAlignment="Center" VerticalAlignment="Top">
+
+        <Grid.RowDefinitions>
+            <!-- header --> <RowDefinition Height="Auto" />
+            <!-- gap    --> <RowDefinition Height="16" />
+            <!-- input  --> <RowDefinition Height="Auto" />
+            <!-- input  --> <RowDefinition Height="Auto" />
+            <!-- button --> <RowDefinition Height="Auto" />
+            <!-- gap    --> <RowDefinition Height="48" />
+            <!-- input  --> <RowDefinition Height="Auto" />
+            <!-- input  --> <RowDefinition Height="Auto" />
+            <!-- button --> <RowDefinition Height="Auto" />
+            <!-- gap    --> <RowDefinition Height="48" />
+            <!-- button --> <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="h1">
+            AdLib - Welcome
+        </TextBlock>
+        
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major"></Separator>
+        
+        <TextBlock Grid.Row="2" Grid.Column="0" Classes="input-label">
+            Hostname:
+        </TextBlock>
+        <TextBox Grid.Row="2" Grid.Column="1" Classes="input-data" Watermark="12.34.56.78"/>
+        <TextBlock Grid.Row="3" Grid.Column="0" Classes="input-label">
+            Identity:
+        </TextBlock>
+        <ComboBox Grid.Row="3" Grid.Column="1" Classes="input-data">
+            <ComboBoxItem>Create new...</ComboBoxItem>
+        </ComboBox>
+
+        <Button Grid.Row="4" Grid.Column="0" Classes="submit">Connect</Button>
+        
+        <Separator Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor"></Separator>
+        
+        <TextBlock Grid.Row="6" Grid.Column="0" Classes="input-label">
+            Shared folder path:
+        </TextBlock>
+        <TextBox Grid.Row="6" Grid.Column="1" Classes="input-data" Watermark="/home/user/Documents"/>
+
+        <TextBlock Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Classes="info-extra">
+            This host's IP: 12.34.56.78
+        </TextBlock>
+        
+        <Button Grid.Row="8" Grid.Column="0" Classes="submit">Share Folder</Button>
+        
+        <Separator Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major"></Separator>
+        
+        <StackPanel Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Classes="submit">Configure</Button>
+            <Button Classes="submit">About</Button>
+        </StackPanel>
+        
+    </Grid>
+</Window>
