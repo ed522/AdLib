@@ -1,0 +1,6 @@
+﻿# Build results
+bin/
+obj/
+
+# Avalonia's generated source files
+/*.axaml.cs
