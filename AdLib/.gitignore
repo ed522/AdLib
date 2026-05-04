@@ -3,4 +3,4 @@ bin/
 obj/
 
 # Avalonia's generated source files
-/*.axaml.cs
+#/*.axaml.cs # breaks build
