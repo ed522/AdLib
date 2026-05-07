@@ -1,15 +1,14 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:viewModel="clr-namespace:AdLib.ViewModel"
-        x:DataType="viewModel:WelcomeViewModel"
-        mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
-        x:Class="AdLib.Welcome"
-        Title="AdLib">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:AdLib.ViewModel"
+             x:DataType="viewModel:StartScreenViewModel"
+             mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
+             x:Class="AdLib.View.StartScreen">
     
     <Design.DataContext>
-        <viewModel:WelcomeViewModel />
+        <viewModel:StartScreenViewModel />
     </Design.DataContext>
     
     <Grid ColumnDefinitions="192,288" 
@@ -46,7 +45,9 @@
             <ComboBoxItem>Create new...</ComboBoxItem>
         </ComboBox>
 
-        <Button Grid.Row="4" Grid.Column="0" Classes="submit">Connect</Button>
+        <Button Grid.Row="4" Grid.Column="0" Classes="submit" Command="{Binding GoToClientScreenCommand}">
+            Connect
+        </Button>
         
         <Separator Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor" />
 
@@ -59,14 +60,16 @@
             This host's IP: 12.34.56.78
         </TextBlock>
         
-        <Button Grid.Row="8" Grid.Column="0" Classes="submit">Share Folder</Button>
+        <Button Grid.Row="8" Grid.Column="0" Classes="submit" Command="{Binding GoToServerScreenCommand}">
+            Share Folder
+        </Button>
         
         <Separator Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major"></Separator>
         
         <StackPanel Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center">
-            <Button Classes="submit">Configure</Button>
-            <Button Classes="submit">About</Button>
+            <Button Classes="submit" Command="{Binding GoToSettingsScreenCommand}">Configure</Button>
+            <Button Classes="submit" Command="{Binding GoToAboutScreenCommand}">About</Button>
         </StackPanel>
         
     </Grid>
-</Window>
+</UserControl>
