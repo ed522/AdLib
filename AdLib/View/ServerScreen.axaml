@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="clr-namespace:AdLib.ViewModel"
+             x:DataType="viewModel:ServerViewModel"
+             mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
+             x:Class="AdLib.View.ServerScreen">
+    
+    <Design.DataContext>
+        <viewModel:ServerViewModel />
+    </Design.DataContext>
+    
+    <Grid ColumnDefinitions="192,288" 
+          HorizontalAlignment="Center" VerticalAlignment="Top">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="24" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="h1">
+            Server mode
+        </TextBlock>
+        
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major"></Separator>
+        
+        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Classes="info-extra">
+            <TextBlock.Text>
+                <MultiBinding StringFormat="Path: {0} | Certificate: {1}">
+                    <Binding Path="SelectedPath" />
+                    <Binding Path="SelectedCertificate" />
+                </MultiBinding>
+            </TextBlock.Text>
+        </TextBlock>
+        
+        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" 
+                   Text="{Binding ConnectedClient, StringFormat='Connected to {0}'}" 
+                   Classes="info-extra" />
+        
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor"></Separator>
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Classes="input-label">Transfer:</TextBlock>
+        <TextBox Grid.Row="5" Grid.Column="1" 
+                 Text="{Binding CurrentTransferName}" IsReadOnly="True" 
+                 Classes="input-data" />
+        
+        <ProgressBar Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" 
+                     Value="{Binding TransferProgress}" Minimum="0" Maximum="100"
+                     Height="20" Margin="8,4"/>
+        
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor"></Separator>
+
+        <StackPanel Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Classes="submit" Command="{Binding PauseTransferCommand}">Pause</Button>
+            <Button Classes="submit" Command="{Binding StopTransferCommand}">Stop</Button>
+        </StackPanel>
+        
+    </Grid>
+</UserControl>
