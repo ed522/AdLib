@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
 public struct HashCheckMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_HASH_CHECK;
+    public MessageType Header => MessageType.HashCheck;
     public string Path;
     public byte[] ExpectedHash; // 32 bytes
 

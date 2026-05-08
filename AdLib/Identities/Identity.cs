@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography.X509Certificates;
 
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.EdEC;
@@ -16,6 +17,8 @@ using Org.BouncyCastle.X509;
 
 using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
 
+using ClrX509Certificate = System.Security.Cryptography.X509Certificates.X509Certificate;
+
 namespace AdLib.Identities;
 
 public class Identity
@@ -32,6 +35,7 @@ public class Identity
     )
     {
         this.Cert = cert;
+        this.ClrCert = X509CertificateLoader.LoadCertificate(cert.GetEncoded());
         this.PrivateKey = privateKey;
         this.FriendlyName = friendlyName;
         this.InternalName = internalName;
@@ -46,6 +50,7 @@ public class Identity
         }
 
         this.Cert = new X509CertificateParser().ReadCertificate(metadata.Certificate);
+        this.ClrCert = X509CertificateLoader.LoadCertificate(metadata.Certificate);
 
         this.PrivateKey = DecryptPrivateKey(password, metadata.IV, metadata.PrivateKeySalt,
             metadata.EncryptedPrivateKey, this.Cert.GetEncoded());
@@ -60,6 +65,7 @@ public class Identity
     }
 
     public X509Certificate Cert { get; }
+    public ClrX509Certificate ClrCert { get; }
     public AsymmetricKeyParameter PrivateKey { get; }
     public string InternalName { get; }
     public string FriendlyName { get; }

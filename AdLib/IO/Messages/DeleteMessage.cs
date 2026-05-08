@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
-public struct MakeDirMessage : IMessage
+public struct DeleteMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_MAKE_DIR;
+    public MessageType Header => MessageType.Delete;
     public string Path;
 
     public void Serialize(System.IO.Stream s) => BitUtils.WriteString(s, this.Path);

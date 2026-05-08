@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
-public struct ChangeTargetMessage : IMessage
+public struct MakeDirMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_CHANGE_TARGET;
+    public MessageType Header => MessageType.MakeDir;
     public string Path;
 
     public void Serialize(System.IO.Stream s) => BitUtils.WriteString(s, this.Path);

@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
 public struct HashResponseMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_HASH_RESPONSE;
+    public MessageType Header => MessageType.HashResponse;
     public bool Status; // 0/1, correct/update needed
 
     public void Serialize(System.IO.Stream s) => s.WriteByte(this.Status ? (byte)1 : (byte)0);

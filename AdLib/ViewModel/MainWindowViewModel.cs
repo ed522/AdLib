@@ -12,15 +12,15 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
-        
         this._currentPage = null!; // set by CurrentPage setter (but that calls SetProperty which throws off
                                    // the null check)
-        PageViewModelBase viewModel = new StartScreenViewModel();
-        viewModel.OnPageChanged += (_ /* sender */, arg) => this.HandlePageChange(arg);
-        this.CurrentPage = viewModel;
-        
+        this.HandlePageChange(new StartScreenViewModel());
     }
 
-    private void HandlePageChange(PageViewModelBase arg) => this.CurrentPage = arg;
+    private void HandlePageChange(PageViewModelBase arg)
+    {
+        arg.OnPageChanged += (_ /* sender */, next) => this.HandlePageChange(next);
+        this.CurrentPage = arg;
+    }
 
 }

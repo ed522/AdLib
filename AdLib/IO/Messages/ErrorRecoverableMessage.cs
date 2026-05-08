@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
-public struct ErrorFatalMessage : IMessage
+public struct ErrorRecoverableMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_ERROR_FATAL;
+    public MessageType Header => MessageType.ErrorRecoverable;
     public uint Errno;
 
     public void Serialize(System.IO.Stream s) => BitUtils.WriteUInt32(s, this.Errno);

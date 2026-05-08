@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
 public struct ControlAckMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_CONTROL_ACK;
+    public MessageType Header => MessageType.ControlAck;
     public byte ControlCode;
 
     public void Serialize(System.IO.Stream s) => s.WriteByte(this.ControlCode);

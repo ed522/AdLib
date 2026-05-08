@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
-public struct EndMessage : IMessage
+public struct InitMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_END;
+    public MessageType Header => MessageType.Init;
     public void Serialize(System.IO.Stream stream) { }
     public void Deserialize(System.IO.Stream stream) { }
 }

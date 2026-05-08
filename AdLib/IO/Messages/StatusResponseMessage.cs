@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
 public struct StatusResponseMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_STATUS_RESPONSE;
+    public MessageType Header => MessageType.StatusResponse;
     public uint Random;
 
     public void Serialize(System.IO.Stream s) => BitUtils.WriteUInt32(s, this.Random);

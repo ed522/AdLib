@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
 public struct InitAckMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_INIT_ACK;
+    public MessageType Header => MessageType.InitAck;
     public void Serialize(System.IO.Stream stream) { }
     public void Deserialize(System.IO.Stream stream) { }
 }

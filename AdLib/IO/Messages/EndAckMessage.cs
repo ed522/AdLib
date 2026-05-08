@@ -1,8 +1,8 @@
-namespace AdLib.IO.Message;
+namespace AdLib.IO.Messages;
 
 public struct EndAckMessage : IMessage
 {
-    public byte Header => IMessage.FRAME_END_ACK;
+    public MessageType Header => MessageType.EndAck;
     public void Serialize(System.IO.Stream stream) { }
     public void Deserialize(System.IO.Stream stream) { }
 }
