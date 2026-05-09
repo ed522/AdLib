@@ -1,17 +1,21 @@
 using System;
+using System.IO;
+using System.Text;
 
 namespace AdLib.IO;
 
 public static class BitUtils
 {
     /// <summary>
-    /// Converts a 64-bit unsigned integer to a little-endian array of bytes
-    /// with variable length. The encoding is possible and reversible for all
-    /// numbers.
+    ///     Converts a 64-bit unsigned integer to a little-endian array of bytes
+    ///     with variable length. The encoding is possible and reversible for all
+    ///     numbers.
     /// </summary>
     /// <param name="value">The value to encode.</param>
-    /// <returns>A little-endian array of bytes of variable length that encodes
-    /// the specified number.</returns>
+    /// <returns>
+    ///     A little-endian array of bytes of variable length that encodes
+    ///     the specified number.
+    /// </returns>
     public static byte[] EncodeVarInt(ulong value)
     {
         // NOTE: least-significant first = little endian
@@ -47,7 +51,7 @@ public static class BitUtils
     {
         ulong value = 0;
         int i = 0;
-        
+
         // short circuit zero-check so if it's the first position it doesn't
         // throw (the 0th byte is always parsed)
         // if not 0th, check that the previous byte's continuation bit is set
@@ -65,75 +69,94 @@ public static class BitUtils
         return value;
     }
 
-    public static void WriteVarInt(System.IO.Stream stream, ulong value)
+    public static void WriteVarInt(Stream stream, ulong value)
     {
         byte[] encoded = EncodeVarInt(value);
         stream.Write(encoded, 0, encoded.Length);
     }
 
-    public static ulong ReadVarLong(System.IO.Stream stream)
+    public static ulong ReadVarLong(Stream stream)
     {
         ulong value = 0;
         int i = 0;
         byte b;
+
         do
         {
             int read = stream.ReadByte();
-            if (read == -1) throw new System.IO.EndOfStreamException("Insufficient data for VarInt.");
+            if (read == -1) throw new EndOfStreamException("Insufficient data for VarInt.");
             b = (byte)read;
+
             checked
             {
                 value |= (ulong)(b & 0x7F) << (7 * i);
             }
+
             i++;
         } while ((b & 0x80) != 0);
 
         return value;
     }
 
-    public static uint ReadVarInt(System.IO.Stream stream) => checked((uint)ReadVarLong(stream));
+    public static uint ReadVarInt(Stream stream) => checked((uint)ReadVarLong(stream));
 
-    public static void WriteString(System.IO.Stream stream, string value)
+    public static void WriteString(Stream stream, string value)
     {
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        byte[] bytes = Encoding.UTF8.GetBytes(value);
         WriteVarInt(stream, (ulong)bytes.Length);
         stream.Write(bytes, 0, bytes.Length);
     }
 
-    public static string ReadString(System.IO.Stream stream)
+    public static string ReadString(Stream stream)
     {
         int length = (int)ReadVarInt(stream);
         byte[] bytes = ReadBlock(stream, length);
-        return System.Text.Encoding.UTF8.GetString(bytes);
+        return Encoding.UTF8.GetString(bytes);
     }
 
-    public static void WriteBlock(System.IO.Stream stream, byte[] block)
+    public static void WriteBlock(Stream stream, byte[] block)
     {
         stream.Write(BitConverter.GetBytes(block.Length), 0, 4);
         stream.Write(block, 0, block.Length);
     }
 
-    public static byte[] ReadBlock(System.IO.Stream stream, int? length = null)
+    public static void WriteBlock(Stream stream, ReadOnlySpan<byte> block)
     {
-        int actualLength = length ?? (int) BitConverter.ToUInt32(ReadFixed(stream, 4), 0);
+        stream.Write(BitConverter.GetBytes(block.Length), 0, 4);
+        stream.Write(block);
+    }
+
+    public static byte[] ReadBlock(Stream stream, int? length = null)
+    {
+        int actualLength = length ?? (int)BitConverter.ToUInt32(ReadFixed(stream, 4), 0);
         return ReadFixed(stream, actualLength);
     }
 
-    public static void WriteFixed(System.IO.Stream stream, byte[] data) => stream.Write(data, 0, data.Length);
+    public static void WriteFixed(Stream stream, byte[] data) => stream.Write(data, 0, data.Length);
 
-    public static byte[] ReadFixed(System.IO.Stream stream, int length)
+    public static byte[] ReadFixed(Stream stream, int length)
     {
         byte[] buffer = new byte[length];
         int totalRead = 0;
+
         while (totalRead < length)
         {
             int read = stream.Read(buffer, totalRead, length - totalRead);
-            if (read <= 0) throw new System.IO.EndOfStreamException($"Insufficient data. Expected {length} bytes, got {totalRead}.");
+
+            if (read <= 0)
+            {
+                throw new EndOfStreamException(
+                    $"Insufficient data. Expected {length} bytes, got {totalRead}.");
+            }
+
             totalRead += read;
         }
+
         return buffer;
     }
 
-    public static void WriteUInt32(System.IO.Stream stream, uint value) => stream.Write(BitConverter.GetBytes(value), 0, 4);
-    public static uint ReadUInt32(System.IO.Stream stream) => BitConverter.ToUInt32(ReadFixed(stream, 4), 0);
+    public static void WriteUInt32(Stream stream, uint value) =>
+        stream.Write(BitConverter.GetBytes(value), 0, 4);
+
+    public static uint ReadUInt32(Stream stream) => BitConverter.ToUInt32(ReadFixed(stream, 4), 0);
 }
