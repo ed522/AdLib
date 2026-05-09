@@ -19,22 +19,24 @@ public static class StreamIO
     public static byte[] EncodeVarInt(ulong value)
     {
         // NOTE: least-significant first = little endian
-        byte[] bits = new byte[10]; // maximum
+        byte[] bits = new byte[10]; // maximum (total 70 bits)
         int count = 0;
 
         // never falls through - should always break (otherwise the entire
         // number has continuation bits set, which would break it)
         for (int i = 0; i < bits.Length; i++)
         {
-            count++;
             // add value
             bits[i] = (byte)(value & 0x7F);
+            count++;
+            
             // set MSB if there's more to come
             value >>= 7;
 
+            // operates on updated value
             if (value != 0)
             {
-                bits[i] |= 0x80;
+                bits[i] |= 0x80; // go back again
             }
             else
             {
@@ -42,6 +44,7 @@ public static class StreamIO
             }
         }
 
+        // trim to length
         byte[] result = new byte[count];
         Array.Copy(bits, result, count);
         return result;
@@ -78,22 +81,22 @@ public static class StreamIO
     public static ulong ReadVarLong(Stream stream)
     {
         ulong value = 0;
-        int i = 0;
-        byte b;
+        int index = 0;
+        byte currentByte;
 
         do
         {
             int read = stream.ReadByte();
             if (read == -1) throw new EndOfStreamException("Insufficient data for VarInt.");
-            b = (byte)read;
+            currentByte = (byte)read;
 
             checked
             {
-                value |= (ulong)(b & 0x7F) << (7 * i);
+                value |= (ulong)(currentByte & 0x7F) << (7 * index);
             }
 
-            i++;
-        } while ((b & 0x80) != 0);
+            index++;
+        } while ((currentByte & 0x80) != 0);
 
         return value;
     }
@@ -112,12 +115,6 @@ public static class StreamIO
         int length = (int)ReadVarInt(stream);
         byte[] bytes = ReadBlock(stream, length);
         return Encoding.UTF8.GetString(bytes);
-    }
-
-    public static void WriteBlock(Stream stream, byte[] block)
-    {
-        stream.Write(BitConverter.GetBytes(block.Length), 0, 4);
-        stream.Write(block, 0, block.Length);
     }
 
     public static void WriteBlock(Stream stream, ReadOnlySpan<byte> block)
@@ -146,7 +143,7 @@ public static class StreamIO
             if (read <= 0)
             {
                 throw new EndOfStreamException(
-                    $"Insufficient data. Expected {length} bytes, got {totalRead}.");
+                    $"Insufficient data - expected {length} bytes, got {totalRead}");
             }
 
             totalRead += read;
