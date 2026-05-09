@@ -6,12 +6,12 @@
              x:DataType="viewModel:ServerViewModel"
              mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
              x:Class="AdLib.View.ServerScreen">
-    
+
     <Design.DataContext>
         <viewModel:ServerViewModel />
     </Design.DataContext>
-    
-    <Grid ColumnDefinitions="192,288" 
+
+    <Grid ColumnDefinitions="192,288"
           HorizontalAlignment="Center" VerticalAlignment="Top">
 
         <Grid.RowDefinitions>
@@ -29,39 +29,41 @@
         <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="h1">
             Server mode
         </TextBlock>
-        
-        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major"></Separator>
-        
+
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major" />
+
         <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Classes="info-extra">
             <TextBlock.Text>
-                <MultiBinding StringFormat="Path: {0} | Certificate: {1}">
+                <MultiBinding StringFormat="Status: {0} | Path: {1} | Certificate: {2}">
+                    <Binding Path="Status" />
                     <Binding Path="SelectedPath" />
                     <Binding Path="SelectedCertificate" />
                 </MultiBinding>
             </TextBlock.Text>
         </TextBlock>
-        
-        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" 
-                   Text="{Binding ConnectedClient, StringFormat='Connected to {0}'}" 
+
+        <TextBlock Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                   Text="{Binding ConnectedClient, StringFormat='Connected to {0}'}"
                    Classes="info-extra" />
-        
-        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor"></Separator>
+
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor" />
 
         <TextBlock Grid.Row="5" Grid.Column="0" Classes="input-label">Transfer:</TextBlock>
-        <TextBox Grid.Row="5" Grid.Column="1" 
-                 Text="{Binding CurrentTransferName}" IsReadOnly="True" 
+        <TextBox Grid.Row="5" Grid.Column="1"
+                 Text="{Binding CurrentTransferName}" IsReadOnly="True"
                  Classes="input-data" />
-        
-        <ProgressBar Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" 
-                     Value="{Binding TransferProgress}" Minimum="0" Maximum="100"
-                     Height="20" Margin="8,4"/>
-        
-        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor"></Separator>
 
-        <StackPanel Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center">
+        <ProgressBar Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
+                     Value="{Binding TransferProgress}" Minimum="0" Maximum="100"
+                     Height="20" Margin="8,4" />
+
+        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor" />
+
+        <StackPanel Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                    HorizontalAlignment="Center">
             <Button Classes="submit" Command="{Binding PauseTransferCommand}">Pause</Button>
             <Button Classes="submit" Command="{Binding StopTransferCommand}">Stop</Button>
         </StackPanel>
-        
+
     </Grid>
 </UserControl>
