@@ -12,18 +12,18 @@ public struct DataMessage : IMessage
 
     public void Serialize(Stream s)
     {
-        BitUtils.WriteString(s, this.Path);
+        StreamIO.WriteString(s, this.Path);
 
-        BitUtils.WriteBlock(s, this.Data ??
+        StreamIO.WriteBlock(s, this.Data ??
                                throw new InvalidOperationException("cannot write empty data block"));
 
-        BitUtils.WriteUInt32(s, this.Crc32);
+        StreamIO.WriteUInt32(s, this.Crc32);
     }
 
     public void Deserialize(Stream s)
     {
-        this.Path = BitUtils.ReadString(s);
-        this.Data = BitUtils.ReadBlock(s);
-        this.Crc32 = BitUtils.ReadUInt32(s);
+        this.Path = StreamIO.ReadString(s);
+        this.Data = StreamIO.ReadBlock(s);
+        this.Crc32 = StreamIO.ReadUInt32(s);
     }
 }

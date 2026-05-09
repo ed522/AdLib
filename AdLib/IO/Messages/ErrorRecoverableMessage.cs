@@ -7,6 +7,6 @@ public struct ErrorRecoverableMessage : IMessage
     public MessageType Header => MessageType.ErrorRecoverable;
     public uint Errno;
 
-    public void Serialize(Stream s) => BitUtils.WriteUInt32(s, this.Errno);
-    public void Deserialize(Stream s) => this.Errno = BitUtils.ReadUInt32(s);
+    public void Serialize(Stream s) => StreamIO.WriteUInt32(s, this.Errno);
+    public void Deserialize(Stream s) => this.Errno = StreamIO.ReadUInt32(s);
 }

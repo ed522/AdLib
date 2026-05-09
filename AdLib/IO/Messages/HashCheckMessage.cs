@@ -10,13 +10,13 @@ public struct HashCheckMessage : IMessage
 
     public void Serialize(Stream s)
     {
-        BitUtils.WriteString(s, this.Path);
-        BitUtils.WriteFixed(s, this.ExpectedHash ?? new byte[32]);
+        StreamIO.WriteString(s, this.Path);
+        StreamIO.WriteFixed(s, this.ExpectedHash ?? new byte[32]);
     }
 
     public void Deserialize(Stream s)
     {
-        this.Path = BitUtils.ReadString(s);
-        this.ExpectedHash = BitUtils.ReadFixed(s, 32);
+        this.Path = StreamIO.ReadString(s);
+        this.ExpectedHash = StreamIO.ReadFixed(s, 32);
     }
 }

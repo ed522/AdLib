@@ -4,7 +4,7 @@ using System.Text;
 
 namespace AdLib.IO;
 
-public static class BitUtils
+public static class StreamIO
 {
     /// <summary>
     ///     Converts a 64-bit unsigned integer to a little-endian array of bytes
