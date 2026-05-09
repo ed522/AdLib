@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace AdLib.IO.Messages;
 
 public enum MessageType : byte
@@ -25,9 +27,9 @@ public enum MessageType : byte
 public interface IMessage
 {
     MessageType Header { get; }
-    void Serialize(System.IO.Stream stream);
-    void Deserialize(System.IO.Stream stream);
-    
+    void Serialize(Stream stream);
+    void Deserialize(Stream stream);
+
     // formats:
     // string: varint length, n bytes data
     // block: 4 byte length, n bytes data

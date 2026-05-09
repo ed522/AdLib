@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 
 namespace AdLib.IO.Messages;
 
@@ -9,15 +10,17 @@ public struct DataMessage : IMessage
     public byte[] Data;
     public uint Crc32;
 
-    public void Serialize(System.IO.Stream s)
+    public void Serialize(Stream s)
     {
         BitUtils.WriteString(s, this.Path);
-        BitUtils.WriteBlock(s, this.Data ?? 
+
+        BitUtils.WriteBlock(s, this.Data ??
                                throw new InvalidOperationException("cannot write empty data block"));
+
         BitUtils.WriteUInt32(s, this.Crc32);
     }
 
-    public void Deserialize(System.IO.Stream s)
+    public void Deserialize(Stream s)
     {
         this.Path = BitUtils.ReadString(s);
         this.Data = BitUtils.ReadBlock(s);

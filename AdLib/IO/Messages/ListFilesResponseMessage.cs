@@ -18,6 +18,7 @@ public struct ListFilesResponseMessage : IMessage
 
         BitUtils.WriteString(stream, this.Path);
         BitUtils.WriteVarInt(stream, (ulong)this.Files.Length);
+
         foreach (FileEntry file in this.Files)
         {
             stream.WriteByte(file.IsDirectory ? (byte)1 : (byte)0);
@@ -30,6 +31,7 @@ public struct ListFilesResponseMessage : IMessage
         this.Path = BitUtils.ReadString(stream);
         ulong length = BitUtils.ReadVarInt(stream);
         this.Files = new FileEntry[length];
+
         for (uint i = 0; i < length; i++)
         {
             bool isDirectory = stream.ReadByte() == 1;
