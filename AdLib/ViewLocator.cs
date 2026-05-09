@@ -17,10 +17,10 @@ public class ViewLocator : IDataTemplate
         {
             return null;
         }
-        
+
         Type type = viewModel.ViewType;
-        
-        return Activator.CreateInstance(type) as Control ?? 
-               new TextBlock() { Text = $"Could not instantiate type {type.FullName!}"};
+
+        return Activator.CreateInstance(type) as Control ??
+               new TextBlock { Text = $"Could not instantiate type {type.FullName!}" };
     }
 }

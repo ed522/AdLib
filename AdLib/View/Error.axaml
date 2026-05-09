@@ -6,11 +6,11 @@
              x:DataType="viewModel:ErrorViewModel"
              mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
              x:Class="AdLib.View.Error">
-    
+
     <Design.DataContext>
         <viewModel:ErrorViewModel />
     </Design.DataContext>
-    
+
     <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
         <TextBlock HorizontalAlignment="Center" Classes="h1">Error</TextBlock>
         <TextBlock HorizontalAlignment="Center">An error occurred!</TextBlock>

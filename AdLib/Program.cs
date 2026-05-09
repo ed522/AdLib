@@ -1,6 +1,6 @@
-﻿using Avalonia;
+﻿using System;
 
-using System;
+using Avalonia;
 
 namespace AdLib;
 
@@ -15,7 +15,7 @@ internal static class Program
 
     private static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
-            .UsePlatformDetect()
-            .WithInterFont()
-            .LogToTrace();
+                     .UsePlatformDetect()
+                     .WithInterFont()
+                     .LogToTrace();
 }

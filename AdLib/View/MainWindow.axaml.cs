@@ -4,5 +4,5 @@ namespace AdLib.View;
 
 public partial class MainWindow : Window
 {
-    public MainWindow() { InitializeComponent(); }
+    public MainWindow() { this.InitializeComponent(); }
 }

@@ -4,5 +4,5 @@ namespace AdLib.View;
 
 public partial class StartScreen : UserControl
 {
-    public StartScreen() { InitializeComponent(); }
+    public StartScreen() { this.InitializeComponent(); }
 }

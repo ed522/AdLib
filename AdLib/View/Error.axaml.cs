@@ -4,5 +4,5 @@ namespace AdLib.View;
 
 public partial class Error : UserControl
 {
-    public Error() { InitializeComponent(); }
+    public Error() { this.InitializeComponent(); }
 }

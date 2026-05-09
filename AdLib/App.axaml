@@ -3,12 +3,12 @@
              xmlns:nsroot="using:AdLib"
              x:Class="AdLib.App"
              RequestedThemeVariant="Dark">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+    <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
-     <Application.DataTemplates>
-         <nsroot:ViewLocator />
-     </Application.DataTemplates>
-             
+    <Application.DataTemplates>
+        <nsroot:ViewLocator />
+    </Application.DataTemplates>
+
     <Application.Styles>
         <FluentTheme />
         <Style Selector="TextBlock.h1">
@@ -19,36 +19,36 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        
+
         <Style Selector="TextBlock.input-label">
-            <Setter Property="Margin" Value="8, 4"></Setter>
-            <Setter Property="VerticalAlignment" Value="Center"></Setter>
-            <Setter Property="MaxHeight" Value="32"></Setter>
+            <Setter Property="Margin" Value="8, 4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="MaxHeight" Value="32" />
         </Style>
         <Style Selector=":is(Control).input-data">
-            <Setter Property="HorizontalAlignment" Value="Right"></Setter>
-            <Setter Property="Width" Value="288"></Setter>
-            <Setter Property="Margin" Value="8, 4"></Setter>
-            <Setter Property="VerticalAlignment" Value="Center"></Setter>
-            <Setter Property="MaxHeight" Value="32"></Setter>
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Width" Value="288" />
+            <Setter Property="Margin" Value="8, 4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="MaxHeight" Value="32" />
         </Style>
-        
+
         <Style Selector="Button.submit">
-            <Setter Property="Margin" Value="4, 8"></Setter>
-            <Setter Property="Padding" Value="6"></Setter>
+            <Setter Property="Margin" Value="4, 8" />
+            <Setter Property="Padding" Value="6" />
         </Style>
-        
+
         <Style Selector="TextBlock.info-extra">
-            <Setter Property="Foreground" Value="#AFAFAF"></Setter>
-            <Setter Property="Margin" Value="8, 4, 8, 8"></Setter>
+            <Setter Property="Foreground" Value="#AFAFAF" />
+            <Setter Property="Margin" Value="8, 4, 8, 8" />
         </Style>
-        
+
         <Style Selector="Separator.separator-major">
             <Setter Property="Margin" Value="8" />
         </Style>
         <Style Selector="Separator.separator-minor">
             <Setter Property="Margin" Value="8, 0" />
-            <Setter Property="Foreground" Value="#555555"></Setter>
+            <Setter Property="Foreground" Value="#555555" />
         </Style>
 
         <Style Selector="Window">

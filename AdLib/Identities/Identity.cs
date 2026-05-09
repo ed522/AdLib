@@ -16,7 +16,6 @@ using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 
 using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
-
 using ClrX509Certificate = System.Security.Cryptography.X509Certificates.X509Certificate;
 
 namespace AdLib.Identities;
@@ -24,10 +23,11 @@ namespace AdLib.Identities;
 public class Identity
 {
     /// <summary>
-    /// The date where certificates will expire. This is a long time in the future, since certificates
-    /// don't need to expire (no real security benefit).
+    ///     The date where certificates will expire. This is a long time in the future, since certificates
+    ///     don't need to expire (no real security benefit).
     /// </summary>
     private static readonly DateTime ExpiryDate = new(9999, 12, 31);
+
     private static readonly Argon2BytesGenerator _hash = new();
 
     private Identity(
@@ -40,10 +40,11 @@ public class Identity
         this.FriendlyName = friendlyName;
         this.InternalName = internalName;
     }
+
     public Identity(IdentityMetadata metadata, string internalName, char[] password)
     {
         this.InternalName = internalName;
-        
+
         if (metadata == null)
         {
             throw new InvalidOperationException("Failed to deserialize identity metadata.");
@@ -58,17 +59,17 @@ public class Identity
         this.FriendlyName = metadata.FriendlyName;
     }
 
-    public static Identity LoadFromFile(string storePath, string internalName, char[] password)
-    {
-        IdentityMetadata metadata = IdentityMetadata.LoadMetadata(storePath, internalName);
-        return new Identity(metadata, internalName, password);       
-    }
-
     public X509Certificate Cert { get; }
     public ClrX509Certificate ClrCert { get; }
     public AsymmetricKeyParameter PrivateKey { get; }
     public string InternalName { get; }
     public string FriendlyName { get; }
+
+    public static Identity LoadFromFile(string storePath, string internalName, char[] password)
+    {
+        IdentityMetadata metadata = IdentityMetadata.LoadMetadata(storePath, internalName);
+        return new Identity(metadata, internalName, password);
+    }
 
     public static Identity CreateNew(
         string storePath, string friendlyName, char[] password, bool isClient
@@ -103,7 +104,7 @@ public class Identity
         ISignatureFactory signatureFactory = new Asn1SignatureFactory("Ed448", keyPair.Private);
         X509Certificate bcCert = certGenerator.Generate(signatureFactory);
 
-        byte[] encryptedPrivateKey = DeriveAndEncryptPrivateKey(password, keyPair.Private, 
+        byte[] encryptedPrivateKey = DeriveAndEncryptPrivateKey(password, keyPair.Private,
             bcCert.GetEncoded(), out byte[] salt, out byte[] iv);
 
         IdentityMetadata metadata = new()
@@ -174,7 +175,7 @@ public class Identity
         // derive key
         Argon2Parameters argonParams = MakeArgonParameters(salt);
         _hash.Init(argonParams);
-        
+
         byte[] secretKey = new byte[32];
         _hash.GenerateBytes(password, secretKey);
 
@@ -195,5 +196,4 @@ public class Identity
             )
         );
     }
-
 }

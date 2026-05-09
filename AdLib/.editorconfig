@@ -1,5 +1,4 @@
-﻿
-[*]
+﻿[*]
 charset = utf-8
 end_of_line = crlf
 trim_trailing_whitespace = false
@@ -53,7 +52,7 @@ dotnet_naming_rule.unity_serialized_field_rule.symbols = unity_serialized_field_
 dotnet_naming_style.all_upper_style.capitalization = all_upper
 dotnet_naming_style.all_upper_style.word_separator = _
 dotnet_naming_style.lower_camel_case_style.capitalization = camel_case
-dotnet_naming_symbols.constants_symbols.applicable_accessibilities = public,internal,protected,protected_internal,private_protected
+dotnet_naming_symbols.constants_symbols.applicable_accessibilities = public, internal, protected, protected_internal, private_protected
 dotnet_naming_symbols.constants_symbols.applicable_kinds = field
 dotnet_naming_symbols.constants_symbols.required_modifiers = const
 dotnet_naming_symbols.constants_symbols.resharper_applicable_kinds = constant_field
@@ -69,12 +68,12 @@ dotnet_naming_symbols.private_constants_symbols.resharper_applicable_kinds = con
 dotnet_naming_symbols.private_constants_symbols.resharper_required_modifiers = any
 dotnet_naming_symbols.private_static_readonly_symbols.applicable_accessibilities = private
 dotnet_naming_symbols.private_static_readonly_symbols.applicable_kinds = field
-dotnet_naming_symbols.private_static_readonly_symbols.required_modifiers = readonly,static
+dotnet_naming_symbols.private_static_readonly_symbols.required_modifiers = readonly, static
 dotnet_naming_symbols.private_static_readonly_symbols.resharper_applicable_kinds = readonly_field
 dotnet_naming_symbols.private_static_readonly_symbols.resharper_required_modifiers = static
-dotnet_naming_symbols.static_readonly_symbols.applicable_accessibilities = public,internal,protected,protected_internal,private_protected
+dotnet_naming_symbols.static_readonly_symbols.applicable_accessibilities = public, internal, protected, protected_internal, private_protected
 dotnet_naming_symbols.static_readonly_symbols.applicable_kinds = field
-dotnet_naming_symbols.static_readonly_symbols.required_modifiers = readonly,static
+dotnet_naming_symbols.static_readonly_symbols.required_modifiers = readonly, static
 dotnet_naming_symbols.static_readonly_symbols.resharper_applicable_kinds = readonly_field
 dotnet_naming_symbols.static_readonly_symbols.resharper_required_modifiers = static
 dotnet_naming_symbols.unity_serialized_field_symbols.applicable_accessibilities = *
