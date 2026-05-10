@@ -33,15 +33,18 @@ public sealed class FileTransferServer : IDisposable
 
     /// <summary>
     ///     Called when a client disconnects from the server. The client's IP is a parameter, but should
-    ///     only be
-    ///     used for informational purposes.
+    ///     only be used for informational purposes.
     /// </summary>
     public event Action<string>? ClientDisconnected;
 
     /// <summary>
+    ///     Called when an error occurs in the server's listening thread.
+    /// </summary>
+    public event Action<Exception>? Error;
+
+    /// <summary>
     ///     Called when a client fails to authenticate for some reason. The certificate might be null if
-    ///     the
-    ///     client fails to present one, in which case it is not possible to trust nor communicate with
+    ///     the client fails to present one, in which case it is not possible to trust nor communicate with
     ///     them.
     /// </summary>
     public event TlsUtils.AuthenticationErrorHandler? AuthenticationError;
@@ -67,7 +70,7 @@ public sealed class FileTransferServer : IDisposable
 
         // define + start thread - since we hold a cancellation token we don't need to worry about keeping
         // references to stop it
-        // single-threaded (one client only)
+        // ClientHandler is threaded so this can handle multiple at once
         Thread listenerThread = new(() =>
         {
             // keep accepting clients until the server is stopped
@@ -76,13 +79,17 @@ public sealed class FileTransferServer : IDisposable
                 try
                 {
                     TlsUtils.ConnectionInfo clientInfo = this._tlsServer.AcceptClient();
-                    using SslStream? sslStream = clientInfo.SslStream;
-                    using TcpClient? tcpClient = clientInfo.InsecureClient;
+                    // client disposes streams in its Dispose, and that's called on thread exit
+                    SslStream? sslStream = clientInfo.SslStream;
+                    TcpClient? insecureStream = clientInfo.InsecureClient;
 
                     string host = clientInfo.Hostname;
                     TlsUtils.ConnectionResult result = clientInfo.Result;
                     TlsUtils.RejectionReason reason = clientInfo.Reason;
 
+                    // did the authentication fail?
+                    // ConnectionResult holds the local auth result (against remote host), RejectionReason is
+                    // for remote auth (remote host checking our cert)
                     if (result != TlsUtils.ConnectionResult.Success ||
                         reason != TlsUtils.RejectionReason.None)
                     {
@@ -92,14 +99,16 @@ public sealed class FileTransferServer : IDisposable
                         continue;
                     }
 
-                    if (sslStream is null)
+                    if (sslStream is null || insecureStream is null)
                     {
                         continue; // failed to connect
                     }
 
                     ClientHandler handler =
-                        new(host, sslStream, this._cancellationTokenSource.Token, this._rootPath);
+                        new(host, sslStream, insecureStream,
+                            this._cancellationTokenSource.Token, this._rootPath);
 
+                    // get rid of client on disconnect
                     handler.Disconnected += h =>
                     {
                         lock (this._clientsLock)
@@ -110,17 +119,21 @@ public sealed class FileTransferServer : IDisposable
                         this.ClientDisconnected?.Invoke(h.RemoteEndPoint);
                     };
 
+                    handler.Error += ex => this.Error?.Invoke(ex);
+
                     lock (this._clientsLock)
                     {
                         this._clients.Add(handler);
                     }
 
                     this.ClientConnected?.Invoke(handler.RemoteEndPoint);
+                    // client's partly connected so let the handler do its thing
                     handler.Start();
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (ex is OperationCanceledException)
                 {
-                    // Listener might have stopped or connection failed during handshake
+                    // kill thread - this means the entire server was killed
+                    return;
                 }
             }
         })
@@ -150,38 +163,50 @@ public sealed class FileTransferServer : IDisposable
     private class ClientHandler : IDisposable
     {
         private const int CommsLoopDelayMs = 10;
-        private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = new();
-        private readonly CancellationToken _cancellationToken;
-        private readonly Random _random = new();
 
-        private readonly string _rootPath;
+        /// <summary>
+        ///     UNENCRYPTED TCP, do not use for anything except disposal
+        /// </summary>
+        private readonly TcpClient _insecureStream;
+
         private readonly SslStream _sslStream;
+        private readonly CancellationToken _cancellationToken;
+        private readonly string _rootPath;
+
+        private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
+        private readonly Random _random = new();
         private bool _isDisconnected;
 
         public ClientHandler(
-            string remoteEndPoint, SslStream sslStream, CancellationToken cancellationToken, string rootPath
+            string remoteEndPoint, SslStream sslStream, TcpClient insecureStream,
+            CancellationToken cancellationToken, string rootPath
         )
         {
-            this._rootPath = rootPath;
-            this._sslStream = sslStream;
-            this._cancellationToken = cancellationToken;
             this.RemoteEndPoint = remoteEndPoint;
+            this._sslStream = sslStream;
+            this._insecureStream = insecureStream;
+            this._cancellationToken = cancellationToken;
+            this._rootPath = rootPath;
         }
 
         public string RemoteEndPoint { get; }
 
         public void Dispose()
         {
-            // do not dispose stream, it is owned by the server (which disposes it in a using statement)
-            foreach ((string partPath, FileStream stream) download in this._activeDownloads.Values)
+            this._insecureStream.Dispose();
+            this._sslStream.Dispose();
+
+            foreach ((string partPath, FileStream stream) in this._activeDownloads.Values)
             {
-                download.stream.Dispose();
+                stream.Dispose();
+                if (File.Exists(partPath)) File.Delete(partPath);
             }
 
             this._activeDownloads.Clear();
         }
 
         public event Action<ClientHandler>? Disconnected;
+        public event Action<Exception>? Error;
 
         public void Start()
         {
@@ -197,7 +222,6 @@ public sealed class FileTransferServer : IDisposable
         {
             try
             {
-                // Handshake
                 // determines type
                 int headerByte = this._sslStream.ReadByte();
 
@@ -208,29 +232,30 @@ public sealed class FileTransferServer : IDisposable
 
                 MessageType type = (MessageType)headerByte;
 
-                // NOTE: make sure that the switch is exhaustive
-                InitMessage message1 = new();
-
                 if (type != MessageType.Init)
                 {
                     throw new InvalidDataException($"Invalid initialization: 0x{headerByte:X2}");
                 }
 
-                // this initializes all of the fields on the struct
-                // no fields to check
+                InitMessage message1 = new();
                 message1.Deserialize(this._sslStream);
+                // no fields to check
 
+                // acknowledge
                 FileTransferUtils.SendMessage(this._sslStream, new InitAckMessage());
 
                 while (!this._cancellationToken.IsCancellationRequested && !this._isDisconnected)
                 {
+                    // the server never sends its own messages except as a consequence of a client's message
                     this.HandleMessage(FileTransferUtils.ReadMessage(this._sslStream));
                     Thread.Sleep(CommsLoopDelayMs);
                     Thread.Yield();
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                this.Error?.Invoke(ex);
+
                 if (!this._isDisconnected)
                 {
                     this.SendMessage(new ErrorFatalMessage());

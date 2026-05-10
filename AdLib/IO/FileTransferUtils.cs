@@ -70,15 +70,18 @@ public static class FileTransferUtils
 
     /// <summary>
     ///     Processes a chunk of an in-progress download, writing it to a temporary <c>.[random].part</c>
-    ///     file to
-    ///     avoid corrupting the file if the connection is lost. If the message is the first occurrence of
-    ///     a given
-    ///     path, a new temporary file is created. If the download has ended, a <c>DataFinishedMessage</c>
-    ///     is
-    ///     required to be sent so that the temporary file can be moved to the final destination.
+    ///     file to avoid corrupting the file if the connection is lost. If the message is the first
+    ///     occurrence of a given path, a new temporary file is created. If the download has ended, a
+    ///     <c>DataFinishedMessage</c> is required to be sent so that the temporary file can be moved to
+    ///     the final destination.
     /// </summary>
     /// <param name="data">the chunk of data that should be written out</param>
-    /// <param name="activeDownloads">a set of in-progress downloads to use</param>
+    /// <param name="activeDownloads">
+    ///     a set of in-progress downloads to use. The key is the nominal target path that was sent by the
+    ///     remote host, and the value is a tuple of the true path for the <c>.part</c> file and a stream
+    ///     for
+    ///     the same.
+    /// </param>
     /// <param name="random">
     ///     a non-cryptographic <c>Random</c> instance that is used for file naming to lessen
     ///     the likelihood of collisions.
@@ -91,21 +94,31 @@ public static class FileTransferUtils
     {
         if (!activeDownloads.TryGetValue(data.Path, out (string partPath, FileStream stream) download))
         {
+            const int PART_RANDOM_EXTENSION_LENGTH = 8 * 6 / 8; // first number controls character count (8)
             string partPath;
 
             // there's an incredibly small chance of a collision but we should still handle it
+            // TECHNICALLY you can create 281 trillion files using every single extension but that's your
+            // fault if you do and this breaks
             do
             {
-                partPath = $"{data.Path}.{random.Next():x8}.part";
-                string? directory = Path.GetDirectoryName(data.Path);
-                if (directory != null) Directory.CreateDirectory(directory);
+                byte[] randomBytes = new byte[PART_RANDOM_EXTENSION_LENGTH];
+                random.NextBytes(randomBytes);
+                partPath = $"{data.Path}.{Convert.ToBase64String(randomBytes)}.part";
             } while (File.Exists(partPath));
 
-            FileStream stream = File.OpenWrite(partPath);
+            string? directory = Path.GetDirectoryName(data.Path);
+            if (directory != null) Directory.CreateDirectory(directory);
+
+            FileStream stream = File.Create(partPath);
             download = (partPath, stream);
             activeDownloads[data.Path] = download;
         }
 
+        if (data.Crc32 != Crc32.HashToUInt32(data.Data))
+        {
+            // TODO do something?
+        }
         download.stream.Write(data.Data);
     }
 
@@ -119,14 +132,13 @@ public static class FileTransferUtils
             download.stream.Dispose();
             if (File.Exists(path)) File.Delete(path);
             File.Move(download.partPath, path);
-            Console.WriteLine($"Downloaded: {path}");
         }
     }
 
     public static void UploadPath(
         string localPath,
         string remotePath,
-        Action<IMessage> sendMessage
+        Action<IMessage> sendMessageAction
     )
     {
         if (File.Exists(localPath))
@@ -135,19 +147,19 @@ public static class FileTransferUtils
             {
                 // upload file in chunks to avoid massive buffering requirements
                 byte[] data = new byte[FILE_BUFFER_SIZE];
-                long totalDataSize = new FileInfo(localPath).Length;
-                long currentOffset = 0;
+                ulong totalDataSize = (ulong)new FileInfo(localPath).Length; // cannot be negative
+                ulong currentOffset = 0;
                 using FileStream fileStream = File.OpenRead(localPath);
 
                 while (currentOffset < totalDataSize)
                 {
                     int read = fileStream.Read(data);
-                    currentOffset += read;
-                    if (read == 0) break;
+                    if (read == 0) break; // finished
+                    currentOffset += (uint)read; // read also shouldn't be negative
 
                     byte[] slice = read < data.Length ? data[..read] : data;
 
-                    sendMessage(new DataMessage
+                    sendMessageAction(new DataMessage
                     {
                         Path = remotePath,
                         Data = slice,
@@ -155,32 +167,32 @@ public static class FileTransferUtils
                     });
                 }
 
-                sendMessage(new DataFinishedMessage { Path = remotePath });
+                sendMessageAction(new DataFinishedMessage { Path = remotePath });
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is IOException)
             {
-                Console.WriteLine($"Failed to upload file {localPath}: {ex.Message}");
+                sendMessageAction(new ErrorRecoverableMessage());
             }
         }
         else if (Directory.Exists(localPath))
         {
-            sendMessage(new MakeDirMessage { Path = remotePath });
+            sendMessageAction(new MakeDirMessage { Path = remotePath });
 
             foreach (string file in Directory.GetFiles(localPath))
             {
-                // plain upload
-                UploadPath(file, $"{remotePath}/{Path.GetFileName(file)}", sendMessage);
+                // plain upload (does not recurse further than this call)
+                UploadPath(file, Path.Combine(remotePath, Path.GetFileName(file)), sendMessageAction);
             }
 
             foreach (string dir in Directory.GetDirectories(localPath))
             {
                 // recurses
-                UploadPath(dir, Path.Combine(remotePath, Path.GetFileName(dir)), sendMessage);
+                UploadPath(dir, Path.Combine(remotePath, Path.GetFileName(dir)), sendMessageAction);
             }
         }
         else
         {
-            Console.WriteLine($"Cannot find file or folder {localPath}");
+            throw new FileNotFoundException("Could not find file or directory", localPath);
         }
     }
 }

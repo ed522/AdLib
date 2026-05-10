@@ -10,7 +10,7 @@ namespace AdLib.IO;
 public static class TlsUtils
 {
     public delegate void AuthenticationErrorHandler(
-        string host, X509Certificate cert, ConnectionResult result, RejectionReason reason
+        string host, X509Certificate? cert, ConnectionResult result, RejectionReason reason
     );
 
     public enum ConnectionResult : byte
