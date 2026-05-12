@@ -164,17 +164,18 @@ public sealed class FileTransferServer : IDisposable
     {
         private const int CommsLoopDelayMs = 10;
 
+        private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
+        private readonly CancellationToken _cancellationToken;
+
         /// <summary>
         ///     UNENCRYPTED TCP, do not use for anything except disposal
         /// </summary>
         private readonly TcpClient _insecureStream;
 
-        private readonly SslStream _sslStream;
-        private readonly CancellationToken _cancellationToken;
+        private readonly Random _random = new();
         private readonly string _rootPath;
 
-        private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
-        private readonly Random _random = new();
+        private readonly SslStream _sslStream;
         private bool _isDisconnected;
 
         public ClientHandler(
@@ -258,7 +259,7 @@ public sealed class FileTransferServer : IDisposable
 
                 if (!this._isDisconnected)
                 {
-                    this.SendMessage(new ErrorFatalMessage());
+                    this.SendMessage(new ErrorFatalMessage { Errno = FatalError.Unspecified });
                 }
             }
             finally
@@ -324,8 +325,8 @@ public sealed class FileTransferServer : IDisposable
                     break;
 
                 default:
-                    throw new IOException($"Did not expect message of type {message.GetType()} at this " +
-                                          $"point");
+                    throw new CommunicationsException($"Did not expect message of type " +
+                                                      $"{message.GetType()} at this point");
             }
         }
 

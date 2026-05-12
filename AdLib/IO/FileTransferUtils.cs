@@ -19,7 +19,7 @@ public static class FileTransferUtils
     /// <param name="stream">the stream to read from</param>
     /// <returns>the deserialized message (an appropriate implementing struct of <c>IMessage</c>)</returns>
     /// <exception cref="EndOfStreamException">if the end of the stream is reached while reading</exception>
-    /// <exception cref="InvalidDataException">if an unknown message ID is encountered</exception>
+    /// <exception cref="CommunicationsException">if an unknown message ID is encountered</exception>
     public static IMessage ReadMessage(Stream stream)
     {
         // determines type
@@ -53,7 +53,7 @@ public static class FileTransferUtils
             MessageType.EndAck => new EndAckMessage(),
             MessageType.ErrorRecoverable => new ErrorRecoverableMessage(),
             MessageType.ErrorFatal => new ErrorFatalMessage(),
-            _ => throw new InvalidDataException($"Unknown message header byte: 0x{headerByte:X2}"),
+            _ => throw new CommunicationsException($"Unknown message header byte: 0x{headerByte:X2}"),
         };
 
         // this initializes all of the fields on the struct
@@ -171,7 +171,7 @@ public static class FileTransferUtils
             }
             catch (Exception ex) when (ex is IOException)
             {
-                sendMessageAction(new ErrorRecoverableMessage());
+                sendMessageAction(new ErrorRecoverableMessage { Errno = RecoverableError.ERRNO_IO_ERROR });
             }
         }
         else if (Directory.Exists(localPath))

@@ -5,8 +5,8 @@ namespace AdLib.IO.Messages;
 public struct ErrorRecoverableMessage : IMessage
 {
     public MessageType Header => MessageType.ErrorRecoverable;
-    public uint Errno;
+    public RecoverableError Errno;
 
-    public void Serialize(Stream s) => StreamIO.WriteUInt32(s, this.Errno);
-    public void Deserialize(Stream s) => this.Errno = StreamIO.ReadUInt32(s);
+    public void Serialize(Stream s) => StreamIO.WriteUInt32(s, (uint)this.Errno);
+    public void Deserialize(Stream s) => this.Errno = (RecoverableError)StreamIO.ReadUInt32(s);
 }

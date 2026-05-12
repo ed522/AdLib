@@ -157,12 +157,13 @@ public sealed class FileTransferClient : IDisposable
                 this.HandleServerMessage(message);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is EndOfStreamException or IOException or InvalidDataException)
         {
-            Console.WriteLine($"Error occurred while connected to remote host: " +
-                              $"{ex.GetType().Name}: {ex.Message}");
-
-            this.IsConnected = false;
+            this.ForceDisconnect(ex, FatalError.IOError);
+        }
+        catch (Exception ex) when (ex is not SystemException)
+        {
+            this.ForceDisconnect(ex, FatalError.Unspecified);
         }
     }
 
@@ -176,7 +177,7 @@ public sealed class FileTransferClient : IDisposable
         }
         catch (Exception ex)
         {
-            this.ForceDisconnect(ex);
+            this.ForceDisconnect(ex, FatalError.IOError);
             throw;
         }
     }
@@ -195,16 +196,16 @@ public sealed class FileTransferClient : IDisposable
         {
             message.Deserialize(this._tlsClient.SslStream);
         }
-        catch (Exception ex) when (ex is EndOfStreamException or IOException or InvalidDataException)
+        catch (Exception ex) when (ex is EndOfStreamException or IOException)
         {
-            this.ForceDisconnect(ex);
+            this.ForceDisconnect(ex, FatalError.IOError);
             throw;
         }
 
         if (message.ControlCode != (byte)type)
         {
             InvalidOperationException ex = new($"Expected {type} acknowledgement, got {message.ControlCode}");
-            this.ForceDisconnect(ex);
+            this.ForceDisconnect(ex, FatalError.InvalidAcknowledgement);
             throw ex;
         }
     }
@@ -314,13 +315,14 @@ public sealed class FileTransferClient : IDisposable
         this.ForceDisconnected?.Invoke(msg);
     }
 
-    private void ForceDisconnect(Exception ex) => this.ForceDisconnect($"{ex.GetType()}: {ex.Message}");
+    private void ForceDisconnect(Exception ex, FatalError errno) => 
+        this.ForceDisconnect($"{ex.GetType()}: {ex.Message}", errno);
 
-    private void ForceDisconnect(string msg)
+    private void ForceDisconnect(string msg, FatalError errno)
     {
         if (this._tlsClient?.SslStream is not null) // true if connected + handshake completed before error
         {
-            this.SendMessage(new ErrorFatalMessage());
+            this.SendMessage(new ErrorFatalMessage { Errno = errno });
         }
 
         this.CloseAfterError(msg);
@@ -334,7 +336,7 @@ public sealed class FileTransferClient : IDisposable
             this.FileReceiving?.Invoke(data.Path);
         }
 
-        FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random);
+        FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random, this.SendMessage);
     }
 
     private void FinalizeDownload(string path)

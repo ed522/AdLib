@@ -5,8 +5,8 @@ namespace AdLib.IO.Messages;
 public struct ErrorFatalMessage : IMessage
 {
     public MessageType Header => MessageType.ErrorFatal;
-    public uint Errno;
+    public FatalError Errno;
 
-    public void Serialize(Stream s) => StreamIO.WriteUInt32(s, this.Errno);
-    public void Deserialize(Stream s) => this.Errno = StreamIO.ReadUInt32(s);
+    public void Serialize(Stream s) => StreamIO.WriteUInt32(s, (uint)this.Errno);
+    public void Deserialize(Stream s) => this.Errno = (FatalError)StreamIO.ReadUInt32(s);
 }

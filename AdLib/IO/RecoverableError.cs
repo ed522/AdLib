@@ -1,0 +1,16 @@
+namespace AdLib.IO;
+
+public enum RecoverableError : uint
+{
+    ERRNO_UNSPECIFIED = 0x0,
+
+    ERRNO_IO_ERROR = 0x100,
+    ERRNO_NO_ACCESS = 0x101,
+
+    ERRNO_INVALID_MESSAGE = 0x200,
+    ERRNO_MESSAGE_NOT_EXPECTED = 0x201,
+    ERRNO_INVALID_UPLOAD = 0x210,
+    ERRNO_FINISH_NONEXISTENT = 0x211,
+    ERRNO_UPLOAD_BAD_CHECKSUM = 0x212,
+    PathOutOfScope = 0x213,
+}
