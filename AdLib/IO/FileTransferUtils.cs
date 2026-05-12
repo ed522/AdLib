@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Hashing;
+using System.Linq;
 
 using AdLib.IO.Messages;
 
@@ -97,6 +98,29 @@ public static class FileTransferUtils
             const int PART_RANDOM_EXTENSION_LENGTH = 8 * 6 / 8; // first number controls character count (8)
             string partPath;
 
+            // check for collisions
+            // there's a case-insensitive collision if: 
+            // 1. the filename already exists, and
+            // 2. there is no case-sensitive match
+
+            // this approach detects collisions on case-insensitive filesystems but not on case-sensitive
+            // ones, nor for edge cases on case-sensitive parts of otherwise insensitive filesystems (without
+            // having to write to a temp file)
+
+            // this also ignores collisions on case-insensitive filesystems in the case that the files have
+            // case-sensitively identical filenames, in which case we replace the contents
+
+            if (File.Exists(data.Path) &&
+                !Directory.GetFiles(Path.GetFullPath(data.Path)).Any(f => f == data.Path))
+            {
+                throw new InvalidPathException(InvalidPathException.InvalidPathReason.CaseConflict);
+            }
+
+            if (data.Path.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+            {
+                throw new InvalidPathException(InvalidPathException.InvalidPathReason.InvalidCharacters);
+            }
+
             // there's an incredibly small chance of a collision but we should still handle it
             // TECHNICALLY you can create 281 trillion files using every single extension but that's your
             // fault if you do and this breaks
@@ -107,10 +131,12 @@ public static class FileTransferUtils
                 partPath = $"{data.Path}.{Convert.ToBase64String(randomBytes)}.part";
             } while (File.Exists(partPath));
 
+            // create the directory if it doesn't exist
             string? directory = Path.GetDirectoryName(data.Path);
-            if (directory != null) Directory.CreateDirectory(directory);
+            if (directory != null) CreateDirectory(directory);
 
-            FileStream stream = File.Create(partPath);
+            // open a stream and store it for future use (overwrite if necessary)
+            FileStream stream = File.OpenWrite(partPath);
             download = (partPath, stream);
             activeDownloads[data.Path] = download;
         }
@@ -120,6 +146,25 @@ public static class FileTransferUtils
             // TODO do something?
         }
         download.stream.Write(data.Data);
+    }
+
+    public static void CreateDirectory(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            // @see ProcessDownloadChunk for explanation
+
+            if (Directory.Exists(path) &&
+                !Directory.GetDirectories(Path.GetFullPath(path))
+                          .Any(f => f == path))
+            {
+                throw new InvalidPathException(InvalidPathException.InvalidPathReason.CaseConflict);
+            }
+
+            return;
+        }
+
+        Directory.CreateDirectory(path);
     }
 
     public static void FinalizeDownload(
@@ -176,17 +221,24 @@ public static class FileTransferUtils
         }
         else if (Directory.Exists(localPath))
         {
+            // perform a depth-first search of the directory
+
+            // make the directory (doesn't error if already exists, but will error if there's a case
+            // conflict)
             sendMessageAction(new MakeDirMessage { Path = remotePath });
 
+            // file includes full path + filename
             foreach (string file in Directory.GetFiles(localPath))
             {
-                // plain upload (does not recurse further than this call)
+                // directly upload file (no further recursion after this)
                 UploadPath(file, Path.Combine(remotePath, Path.GetFileName(file)), sendMessageAction);
             }
 
+            // dir includes full path + dir name
             foreach (string dir in Directory.GetDirectories(localPath))
             {
-                // recurses
+                // recursively upload all directories - based on local & remote subdirectories of the current
+                // base
                 UploadPath(dir, Path.Combine(remotePath, Path.GetFileName(dir)), sendMessageAction);
             }
         }

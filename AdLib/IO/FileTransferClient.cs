@@ -284,7 +284,7 @@ public sealed class FileTransferClient : IDisposable
                 break;
 
             case MakeDirMessage makeDir:
-                Directory.CreateDirectory(makeDir.Path);
+                FileTransferUtils.CreateDirectory(makeDir.Path);
                 break;
 
             case StatusRequestMessage status: // not used by server

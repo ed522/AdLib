@@ -274,17 +274,17 @@ public sealed class FileTransferServer : IDisposable
             switch (message)
             {
                 case FileRequestMessage request:
-                    if (!CheckPath(this._rootPath, request.Path)) break;
+                    this.CheckPath(request.Path);
                     FileTransferUtils.UploadPath(request.Path, request.Path, this.SendMessage);
                     break;
 
                 case ListFilesMessage list:
-                    if (!CheckPath(this._rootPath, list.Path)) break;
+                    this.CheckPath(list.Path);
                     this.SendListing(list.Path);
                     break;
 
                 case DeleteMessage delete:
-                    if (!CheckPath(this._rootPath, delete.Path)) break;
+                    this.CheckPath(delete.Path);
 
                     if (File.Exists(delete.Path))
                     {
@@ -299,19 +299,19 @@ public sealed class FileTransferServer : IDisposable
                     break;
 
                 case MakeDirMessage makeDir:
-                    if (!CheckPath(this._rootPath, makeDir.Path)) break;
+                    this.CheckPath(makeDir.Path);
 
-                    Directory.CreateDirectory(makeDir.Path);
+                    FileTransferUtils.CreateDirectory(makeDir.Path);
                     this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.MakeDir });
                     break;
 
                 case DataMessage data:
-                    if (!CheckPath(this._rootPath, data.Path)) break;
                     FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random);
+                    this.CheckPath(data.Path);
                     break;
 
                 case DataFinishedMessage finished:
-                    if (!CheckPath(this._rootPath, finished.Path)) break;
+                    this.CheckPath(finished.Path);
                     FileTransferUtils.FinalizeDownload(finished.Path, this._activeDownloads);
                     break;
 
@@ -334,13 +334,35 @@ public sealed class FileTransferServer : IDisposable
         ///     Verifies that the specified path is a legal path to request. Legal paths are those that are
         ///     subpaths of or equal to the root path.
         /// </summary>
-        /// <param name="rootPath">the root path to check against</param>
-        /// <param name="path">the path in question that should be checked</param>
+        /// <param name="path">the path that should be checked against this server's root path</param>
         /// <returns><c>true</c> if the checked path is a subpath of or </returns>
-        private static bool CheckPath(string rootPath, string path) => Path.GetFullPath(path)
-                                                                           .StartsWith(rootPath,
-                                                                               StringComparison
-                                                                                   .OrdinalIgnoreCase);
+        private void CheckPath(string path)
+        {
+            bool isValid = false;
+
+            DirectoryInfo baseInfo = new(Path.GetFullPath(this._rootPath));
+            DirectoryInfo? dirInfo = new(Path.GetFullPath(path));
+
+            while (dirInfo != null)
+            {
+                // case-neutrally check if two paths are equal (relative distance is 0)
+                // may not work in case of soft/hard links but that would only affect out-of-scope links that
+                // link to somewhere in-scope, which is sufficiently uncommon to reject
+                if (Path.GetRelativePath(baseInfo.Name, dirInfo.Name) == ".")
+                {
+                    isValid = true;
+                    break;
+                }
+
+                // go up the chain until the root
+                dirInfo = dirInfo.Parent;
+            }
+
+            if (!isValid)
+            {
+                this.SendMessage(new ErrorRecoverableMessage { Errno = RecoverableError.PathOutOfScope });
+            }
+        }
 
         private void SendMessage(IMessage message)
         {
