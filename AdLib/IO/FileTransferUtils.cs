@@ -38,9 +38,12 @@ public static class FileTransferUtils
         {
             MessageType.Init => new InitMessage(),
             MessageType.InitAck => new InitAckMessage(),
+
             MessageType.Data => new DataMessage(),
             MessageType.DataFinished => new DataFinishedMessage(),
             MessageType.FileRequest => new FileRequestMessage(),
+            MessageType.ResendRequest => new ResendRequestMessage(),
+
             MessageType.StatusRequest => new StatusRequestMessage(),
             MessageType.StatusResponse => new StatusResponseMessage(),
             MessageType.MakeDir => new MakeDirMessage(),
@@ -50,6 +53,7 @@ public static class FileTransferUtils
             MessageType.HashCheck => new HashCheckMessage(),
             MessageType.HashResponse => new HashResponseMessage(),
             MessageType.ControlAck => new ControlAckMessage(),
+
             MessageType.End => new EndMessage(),
             MessageType.EndAck => new EndAckMessage(),
             MessageType.ErrorRecoverable => new ErrorRecoverableMessage(),
@@ -87,10 +91,12 @@ public static class FileTransferUtils
     ///     a non-cryptographic <c>Random</c> instance that is used for file naming to lessen
     ///     the likelihood of collisions.
     /// </param>
+    /// <param name="sendMessageAction">an action that sends a message to the remote host</param>
     public static void ProcessDownloadChunk(
         DataMessage data,
         Dictionary<string, (string partPath, FileStream stream)> activeDownloads,
-        Random random
+        Random random,
+        Action<IMessage> sendMessageAction
     )
     {
         if (!activeDownloads.TryGetValue(data.Path, out (string partPath, FileStream stream) download))
@@ -141,10 +147,18 @@ public static class FileTransferUtils
             activeDownloads[data.Path] = download;
         }
 
+        // arrives after file finishes
         if (data.Crc32 != Crc32.HashToUInt32(data.Data))
         {
-            // TODO do something?
+            ResendRequestMessage resendRequest = new()
+            {
+                Path = data.Path,
+                Offset = (ulong)download.stream.Position,
+            };
+
+            sendMessageAction(resendRequest);
         }
+
         download.stream.Write(data.Data);
     }
 
@@ -246,5 +260,25 @@ public static class FileTransferUtils
         {
             throw new FileNotFoundException("Could not find file or directory", localPath);
         }
+    }
+
+    public static void ResendBlock(
+        ResendRequestMessage resend, Action<IMessage> sendMessageAction
+    )
+    {
+        using FileStream tmpStream = File.Open(resend.Path, FileMode.Open, FileAccess.Read,
+            FileShare.Read);
+
+        tmpStream.Seek((long)resend.Offset, SeekOrigin.Begin);
+        byte[] buffer = new byte[FILE_BUFFER_SIZE];
+        int read = tmpStream.Read(buffer);
+
+        DataMessage data = new()
+        {
+            Path = resend.Path,
+            Data = buffer[..read],
+        };
+
+        sendMessageAction(data);
     }
 }

@@ -306,8 +306,11 @@ public sealed class FileTransferServer : IDisposable
                     break;
 
                 case DataMessage data:
-                    FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random);
                     this.CheckPath(data.Path);
+
+                    FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random,
+                        this.SendMessage);
+
                     break;
 
                 case DataFinishedMessage finished:
@@ -322,6 +325,11 @@ public sealed class FileTransferServer : IDisposable
 
                 case StatusRequestMessage status:
                     this.SendMessage(new StatusResponseMessage { Random = status.Random });
+                    break;
+
+                case ResendRequestMessage resend:
+                    this.CheckPath(resend.Path);
+                    FileTransferUtils.ResendBlock(resend, this.SendMessage);
                     break;
 
                 default:

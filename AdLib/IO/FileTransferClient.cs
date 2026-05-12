@@ -291,6 +291,10 @@ public sealed class FileTransferClient : IDisposable
                 this.SendMessage(new StatusResponseMessage { Random = status.Random });
                 break;
 
+            case ResendRequestMessage resend:
+                FileTransferUtils.ResendBlock(resend, this.SendMessage);
+                break;
+
             case ControlAckMessage ack: // will manually be expected
                 throw new InvalidOperationException($"Unexpected acknowledgement for {ack.ControlCode}");
 

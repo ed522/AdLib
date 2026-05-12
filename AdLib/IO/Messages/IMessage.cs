@@ -9,6 +9,7 @@ public enum MessageType : byte
     Data = 0x10,
     DataFinished = 0x11,
     FileRequest = 0x12,
+    ResendRequest = 0x13,
     StatusRequest = 0x20,
     StatusResponse = 0xA0,
     ListFiles = 0x21,
