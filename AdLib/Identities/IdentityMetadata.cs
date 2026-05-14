@@ -13,9 +13,7 @@ public class IdentityMetadata
         WriteIndented = true,
     };
 
-    public required byte[] IV { get; init; }
     public required byte[] Certificate { get; init; }
-    public required byte[] PrivateKeySalt { get; init; }
     public required byte[] EncryptedPrivateKey { get; init; }
     public required string FriendlyName { get; init; }
 
