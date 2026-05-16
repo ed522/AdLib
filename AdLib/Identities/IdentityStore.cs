@@ -6,12 +6,12 @@ using System.Linq;
 
 namespace AdLib.Identities;
 
-public class IdentitySet
+public class IdentityStore
 {
     private readonly Dictionary<string, IdentityMetadata> _availableIdentities = [];
     private readonly List<Identity> _unlockedIdentities = [];
 
-    public IdentitySet(string folderPath)
+    public IdentityStore(string folderPath)
     {
         const string fileExtension = IdentityMetadata.FILE_EXTENSION;
         this.FolderPath = folderPath;

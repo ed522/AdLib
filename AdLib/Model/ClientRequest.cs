@@ -1,4 +1,4 @@
-namespace AdLib.IO;
+namespace AdLib.Model;
 
 public struct ClientRequest
 {

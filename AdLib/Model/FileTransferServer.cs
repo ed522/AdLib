@@ -7,9 +7,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 
 using AdLib.Identities;
-using AdLib.IO.Messages;
+using AdLib.IO;
 
-namespace AdLib.IO;
+namespace AdLib.Model;
 
 public sealed class FileTransferServer : IDisposable
 {

@@ -5,9 +5,10 @@ using System.IO;
 using System.Threading;
 
 using AdLib.Identities;
+using AdLib.IO;
 using AdLib.IO.Messages;
 
-namespace AdLib.IO;
+namespace AdLib.Model;
 
 public sealed class FileTransferClient : IDisposable
 {
