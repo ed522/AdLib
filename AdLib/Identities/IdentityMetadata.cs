@@ -6,7 +6,7 @@ namespace AdLib.Identities;
 
 public class IdentityMetadata
 {
-    public const string FILE_EXTENSION = ".json";
+    public const string FILE_EXTENSION = ".adi";
 
     public static readonly JsonSerializerOptions OPTIONS = new()
     {

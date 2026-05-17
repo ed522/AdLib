@@ -53,8 +53,8 @@ public sealed class FileTransferClient : IDisposable
         {
             try
             {
-                this._tlsClient = new TlsClient();
-                TlsUtils.ConnectionInfo info = this._tlsClient.Connect(host, identity);
+                this._tlsClient = new TlsClient(identity, new TrustStore()); // TODO load certificates
+                TlsUtils.ConnectionInfo info = this._tlsClient.Connect(host);
                 TlsUtils.ConnectionResult result = info.Result;
                 TlsUtils.RejectionReason reason = info.Reason;
 
@@ -72,7 +72,9 @@ public sealed class FileTransferClient : IDisposable
                 // cert
                 if (result != TlsUtils.ConnectionResult.Success || reason != TlsUtils.RejectionReason.None)
                 {
-                    if (info.Certificate is null)
+                    // note: PresentedCert is the one the server offered, Certificate is the one that we have
+                    // (if any)
+                    if (info.PresentedCert is null)
                     {
                         IOException ex = new("Remote host did not offer a certificate");
                         this.CloseAfterError(ex);
@@ -80,7 +82,7 @@ public sealed class FileTransferClient : IDisposable
                     }
 
                     // handles adding trust, showing fingerprint, error dialogues etc.
-                    this.CertificateError?.Invoke(host, info.Certificate, result, reason);
+                    this.CertificateError?.Invoke(host, info.Certificate, info.PresentedCert, result, reason);
                     return;
                 }
 
@@ -320,7 +322,7 @@ public sealed class FileTransferClient : IDisposable
         this.ForceDisconnected?.Invoke(msg);
     }
 
-    private void ForceDisconnect(Exception ex, FatalError errno) => 
+    private void ForceDisconnect(Exception ex, FatalError errno) =>
         this.ForceDisconnect($"{ex.GetType()}: {ex.Message}", errno);
 
     private void ForceDisconnect(string msg, FatalError errno)

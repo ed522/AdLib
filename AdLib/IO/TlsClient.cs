@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -11,9 +10,8 @@ using static AdLib.IO.TlsUtils;
 
 namespace AdLib.IO;
 
-public sealed class TlsClient : IDisposable
+public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDisposable
 {
-    private readonly Dictionary<string, X509Certificate> _trustedCerts = [];
     private TcpClient? _tcpClient;
 
     public SslStream? SslStream { get; private set; }
@@ -36,7 +34,7 @@ public sealed class TlsClient : IDisposable
         }
     }
 
-    public ConnectionInfo Connect(string host, Identity identity)
+    public ConnectionInfo Connect(string host)
     {
         this._tcpClient = new TcpClient();
         this._tcpClient.Connect(host, PORT);
@@ -79,8 +77,5 @@ public sealed class TlsClient : IDisposable
         }
     }
 
-    public void TrustCertificate(string hostName, X509Certificate certificate)
-    {
-        this._trustedCerts.Add(hostName, certificate);
-    }
+    public void TrustCertificate(HostCertificate cert) => trustedCerts.Trust(cert);
 }

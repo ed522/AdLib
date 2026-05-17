@@ -49,7 +49,7 @@ public sealed class FileTransferServer : IDisposable
     /// </summary>
     public event TlsUtils.AuthenticationErrorHandler? AuthenticationError;
 
-    public void Start(Identity identity, Dictionary<string, X509Certificate> trustedCerts, string sharedPath)
+    public void Start(Identity identity, TrustStore store, string sharedPath)
     {
         this._rootPath = Path.GetFullPath(sharedPath);
 
@@ -59,13 +59,7 @@ public sealed class FileTransferServer : IDisposable
         }
 
         // server setup
-        this._tlsServer = new TlsServer(identity);
-
-        foreach ((string host, X509Certificate cert) in trustedCerts)
-        {
-            this._tlsServer.TrustCertificate(host, cert);
-        }
-
+        this._tlsServer = new TlsServer(identity, store);
         this._tlsServer.Start();
 
         // define + start thread - since we hold a cancellation token we don't need to worry about keeping
@@ -78,24 +72,27 @@ public sealed class FileTransferServer : IDisposable
             {
                 try
                 {
-                    TlsUtils.ConnectionInfo clientInfo = this._tlsServer.AcceptClient();
+                    TlsUtils.ConnectionInfo connectionInfo = this._tlsServer.AcceptClient();
                     // client disposes streams in its Dispose, and that's called on thread exit
-                    SslStream? sslStream = clientInfo.SslStream;
-                    TcpClient? insecureStream = clientInfo.InsecureClient;
+                    SslStream? sslStream = connectionInfo.SslStream;
+                    TcpClient? insecureStream = connectionInfo.InsecureClient;
 
-                    string host = clientInfo.Hostname;
-                    TlsUtils.ConnectionResult result = clientInfo.Result;
-                    TlsUtils.RejectionReason reason = clientInfo.Reason;
+                    string host = connectionInfo.Hostname;
+                    Certificate? cert = connectionInfo.Certificate;
+                    X509Certificate? presentedCert = connectionInfo.PresentedCert;
+                    TlsUtils.ConnectionResult result = connectionInfo.Result;
+                    TlsUtils.RejectionReason reason = connectionInfo.Reason;
 
                     // did the authentication fail?
                     // ConnectionResult holds the local auth result (against remote host), RejectionReason is
                     // for remote auth (remote host checking our cert)
+
                     if (result != TlsUtils.ConnectionResult.Success ||
                         reason != TlsUtils.RejectionReason.None)
                     {
                         // subscribers will handle both remote rejections (reason) and
                         // local rejections (result)
-                        this.AuthenticationError?.Invoke(host, clientInfo.Certificate, result, reason);
+                        this.AuthenticationError?.Invoke(host, cert, presentedCert, result, reason);
                         continue;
                     }
 

@@ -1,16 +1,19 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+
+using AdLib.Identities;
 
 namespace AdLib.IO;
 
 public static class TlsUtils
 {
     public delegate void AuthenticationErrorHandler(
-        string host, X509Certificate? cert, ConnectionResult result, RejectionReason reason
+        string host, Certificate? cert, X509Certificate? presentedCert,
+        ConnectionResult result, RejectionReason reason
     );
 
     public enum ConnectionResult : byte
@@ -39,12 +42,15 @@ public static class TlsUtils
 
     public static bool ValidateCertificate(
         object sender, X509Certificate? certificate, SslPolicyErrors sslPolicyErrors,
-        Dictionary<string, X509Certificate> trustedCerts,
-        out ConnectionResult result, out X509Certificate? certOut
+        TrustStore trustedCerts, bool validateHostnames,
+        out ConnectionResult result, out Certificate? certInfo, out X509Certificate? presentedCert
     )
     {
-        // just so we can get a hold of the cert in user code
-        certOut = certificate;
+        // get a hold of the cert in user code
+        presentedCert = certificate;
+
+        // not validated yet, so we can't return anything'
+        certInfo = null;
         // we can safely ignore a name mismatch - in fact, this is required because the server can change
         // hostnames, and that would make a cert invalid
         sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateNameMismatch;
@@ -57,6 +63,7 @@ public static class TlsUtils
 
         if (sender is string hostName)
         {
+            // some error
             if (sslPolicyErrors != SslPolicyErrors.None)
             {
                 // bad certificate
@@ -64,27 +71,53 @@ public static class TlsUtils
                 return false;
             }
 
-            if (trustedCerts.TryGetValue(hostName, out X509Certificate? foundCert))
-            {
-                // verify that this is the correct certificate
-                bool status = foundCert.GetCertHash(CertHash) == certificate.GetCertHash(CertHash);
+            Certificate? cert;
 
-                if (status)
+            if (validateHostnames)
+            {
+                if (trustedCerts.TryGetCertificate(hostName, out HostCertificate? foundCert))
                 {
-                    // certs match, authentication successful
-                    result = ConnectionResult.Success;
-                    return true;
+                    cert = foundCert.Certificate;
+                }
+                else
+                {
+                    // untrusted, but not spoofed - can ask user for confirmation
+                    result = ConnectionResult.UntrustedCertificate;
+                    return false;
+                }
+            }
+            else
+            {
+                // validate by thumbprint
+                Certificate[] possibleCerts = trustedCerts.AllTrustedCertificates.Where(c =>
+                    c.X509Cert.GetCertHash(CertHash) == certificate.GetCertHash(CertHash)
+                ).ToArray();
+
+                if (possibleCerts.Length == 0)
+                {
+                    // ^^
+                    result = ConnectionResult.UntrustedCertificate;
+                    return false;
                 }
 
-                // we've seen this host before, but the cert is different. someone might be trying to
-                // spoof us - do not trust, do not ask for confirmation
-                result = ConnectionResult.MismatchedCertificate;
-                return false;
+                cert = possibleCerts[0];
             }
 
-            // not in trusted list - can ask user for confirmation
-            result = ConnectionResult.UntrustedCertificate;
+            X509Certificate2 clrCert = cert.X509Cert;
+            bool status = clrCert.GetCertHash(CertHash) == certificate.GetCertHash(CertHash);
+
+            if (status)
+            {
+                // certs match, authentication successful
+                result = ConnectionResult.Success;
+                return true;
+            }
+
+            // we've seen this host before, but the cert is different. someone might be trying to
+            // spoof us - do not trust, do not ask for confirmation
+            result = ConnectionResult.MismatchedCertificate;
             return false;
+
         }
         // should be unreachable
 
@@ -131,8 +164,9 @@ public static class TlsUtils
         public ConnectionResult Result;
         public RejectionReason Reason;
         public string Hostname;
+        public X509Certificate? PresentedCert;
         public TcpClient? InsecureClient;
         public SslStream? SslStream;
-        public X509Certificate? Certificate;
+        public Certificate? Certificate;
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -15,15 +14,18 @@ public sealed class TlsServer : IDisposable
     private readonly Identity _identity;
     private readonly TcpListener _listener;
 
-    private readonly Dictionary<string, X509Certificate> _trustedCerts;
+    private readonly TrustStore _trustStore;
     private bool _disposed;
 
-    public TlsServer(Identity identity, Dictionary<string, X509Certificate>? trustedCerts = null)
+    public TlsServer(Identity identity, TrustStore? trustedCerts = null)
     {
         this._identity = identity;
         this._listener = new TcpListener(IPAddress.Any, TlsUtils.PORT);
-        this._trustedCerts = trustedCerts ?? [];
+        this._trustStore = trustedCerts ?? new TrustStore();
     }
+    
+    public TlsServer(Identity identity, Certificate[]? trustedCerts = null) : 
+        this(identity, new TrustStore(trustedCerts)) { }
 
     public void Dispose()
     {
@@ -43,6 +45,7 @@ public sealed class TlsServer : IDisposable
 
         NetworkStream networkStream = tcpClient.GetStream();
         X509Certificate? clientCert = null;
+        Certificate? realCert = null;
         TlsUtils.ConnectionResult result = TlsUtils.ConnectionResult.Success;
         TlsUtils.RejectionReason reason = TlsUtils.RejectionReason.None;
 
@@ -65,18 +68,19 @@ public sealed class TlsServer : IDisposable
         {
             Result = result,
             Reason = reason,
-            Hostname = ip?.ToString() ?? "unknown",
+            Hostname = ip?.ToString() ?? "<unknown>",
             InsecureClient = tcpClient,
             SslStream = sslStream,
-            Certificate = clientCert,
+            Certificate = realCert,
+            PresentedCert = clientCert,
         };
 
         bool Validate(object sender, X509Certificate? cert, X509Chain? _, SslPolicyErrors errors)
         {
-            return TlsUtils.ValidateCertificate(sender, cert, errors, this._trustedCerts, out result,
-                out clientCert);
+            return TlsUtils.ValidateCertificate(sender, cert, errors, this._trustStore, false,
+                out result, out realCert, out clientCert);
         }
     }
 
-    public void TrustCertificate(string host, X509Certificate cert) { this._trustedCerts[host] = cert; }
+    public void TrustCertificate(Certificate cert) { this._trustStore.Trust(cert); }
 }
