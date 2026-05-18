@@ -37,7 +37,7 @@
             Hostname:
         </TextBlock>
         <TextBox Grid.Row="2" Grid.Column="1" Classes="input-data" Watermark="12.34.56.78"
-                 Text="{Binding Path=TargetIp}" />
+                 Text="{Binding Path=ClientTargetIp}" />
         <TextBlock Grid.Row="3" Grid.Column="0" Classes="input-label">
             Identity:
         </TextBlock>
@@ -55,7 +55,7 @@
             Shared folder path:
         </TextBlock>
         <TextBox Grid.Row="6" Grid.Column="1" Classes="input-data" Watermark="/home/user/Documents"
-                 Text="{Binding SharedFolder}" />
+                 Text="{Binding ServerSharedFolder}" />
 
         <TextBlock Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Classes="info-extra">
             This host's IP: 12.34.56.78

@@ -1,5 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
+using AdLib.Config;
+using AdLib.Identities;
+using AdLib.Model;
 using AdLib.View;
 
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,13 +15,43 @@ namespace AdLib.ViewModel;
 
 public partial class ServerViewModel : PageViewModelBase
 {
-    [ObservableProperty] private string _connectedClient = "None";
-    [ObservableProperty] private string _currentTransferName = "No active transfer";
-    [ObservableProperty] private string _selectedCertificate = string.Empty;
+    private readonly FileTransferServer _server = new();
+    [ObservableProperty] private string _selectedCertificate = "";
+    [ObservableProperty] private string _selectedPath = "";
+    [ObservableProperty] private string _status = "Stopped";
 
-    [ObservableProperty] private string _selectedPath = string.Empty;
-    [ObservableProperty] private string _status = "Disconnected";
+    [ObservableProperty] private List<ClientInfo?> _connectedClients = [];
+    [ObservableProperty] private List<string> _currentTransfers = ["No active transfer"];
     [ObservableProperty] private double _transferProgress;
+
+    public ServerViewModel(Identity identity, string sharedFolder, char[] password)
+    {
+        this.Status = "Starting";
+        this.SelectedPath = sharedFolder;
+        this.SelectedCertificate = identity.FriendlyName;
+
+        this._server.ClientConnected += (_, args) => this._connectedClients.Add(args.Client);
+        this._server.ClientDisconnected += (_, args) => this._connectedClients.Remove(args.Client);
+
+        TrustStore globalStore = new();
+        TrustStore localStore = new();
+        globalStore.Load(ConfigDirectories.ServerGloballyTrustedIdentitiesPath, null);
+
+        localStore.Load(
+            Path.Combine(ConfigDirectories.ServerLocallyTrustedIdentitiesPath, identity.InternalName),
+            password
+        );
+
+        // server, so certificates shouldn't be associated with a host
+        if (localStore.TrustedHostCertificates.Any() || globalStore.TrustedHostCertificates.Any())
+        {
+            throw new InvalidStoreException("Server's trusted certificate store must not contain any " +
+                                            "certificates that are associated with a hostname");
+        }
+
+        this._server.Start(identity, globalStore.Combine(localStore), sharedFolder);
+    }
+
     public override Type ViewType => typeof(ServerScreen);
     public override string Title => "Hosting Server";
 
@@ -25,7 +61,9 @@ public partial class ServerViewModel : PageViewModelBase
     [RelayCommand]
     private void StopTransfer()
     {
-        // TODO implement stopping logic in model
+        this._server.Stop();
+        this._server.Dispose();
+        this.Status = "Stopped";
         this.ChangePage(this, new StartScreenViewModel());
     }
 }
