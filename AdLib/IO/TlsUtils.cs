@@ -19,11 +19,11 @@ public static class TlsUtils
     public enum ConnectionResult : byte
     {
         DidNotAttempt = 0,
-        Success,
-        BadCertificate,
-        UntrustedCertificate,
-        MismatchedCertificate,
-        UnspecifiedError,
+        Success = 0x01,
+        BadCertificate = 0x10,
+        UntrustedCertificate = 0x11,
+        MismatchedCertificate = 0x12,
+        UnspecifiedError = 0xFF,
     }
 
     public enum RejectionReason : byte
