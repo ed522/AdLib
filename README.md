@@ -81,4 +81,4 @@ AdLib is made possible by the following open-source projects:
 - **[.NET](https://dotnet.microsoft.com/):** the cross-platform runtime. .NET Runtime is licensed under MIT.
 
 ---
-*© ed522 2026. Licensed under the MIT license. Do distribute.*
+*© ed522 2026. Licensed under GPL v3.0 (or later). See /LICENSE*
