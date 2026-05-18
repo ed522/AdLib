@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using AdLib.Cryptography;
@@ -18,13 +19,15 @@ public class TrustStore
     public IEnumerable<Certificate> TrustedCertificates => this._trustedCerts.AsReadOnly();
 
     public IEnumerable<X509Certificate> TrustedX509Certificates =>
-        this._trustedCerts.Select(cert => cert.X509Cert)
-                          .Concat(this._trustedHostCerts.Values.Select(c => c.Certificate.X509Cert));
-    
+        this._trustedCerts
+            .Select(cert => cert.X509Cert)
+            .Concat(this._trustedHostCerts.Values.Select(c => c.Certificate.X509Cert));
+
     public IEnumerable<Certificate> AllTrustedCertificates =>
         this._trustedCerts.Concat(this._trustedHostCerts.Values.Select(c => c.Certificate));
 
     public TrustStore() { }
+
     public TrustStore(IEnumerable<Certificate>? trustedCerts)
     {
         if (trustedCerts is not null)
@@ -32,7 +35,7 @@ public class TrustStore
             this.TrustAll(trustedCerts);
         }
     }
-    
+
     public void Load(string folder, char[]? password)
     {
         // search for all keys
@@ -80,7 +83,15 @@ public class TrustStore
         this._trustedHostCerts.ContainsKey(cert.Host) && cert.Equals(this._trustedHostCerts[cert.Host]);
 
     public bool IsKnown(string host) => this._trustedHostCerts.ContainsKey(host);
-    public HostCertificate? GetCertificate(string host) => this._trustedHostCerts.GetValueOrDefault(host);
+
+    public HostCertificate? GetCertificateByHostOrDefault(string host, HostCertificate? defaultVal = null) =>
+        this._trustedHostCerts.GetValueOrDefault(host) ?? defaultVal;
+
+    public Certificate? GetCertificateByThumbprintOrDefault(
+        byte[] thumbprint, HashAlgorithmName certHash, Certificate? defaultVal = null
+    ) => this.AllTrustedCertificates
+             .Where(c => c.X509Cert.GetCertHash(certHash).SequenceEqual(thumbprint))
+             .FirstOrDefault(defaultVal);
 
     public void Trust(Certificate cert) => this._trustedCerts.Add(cert);
     public void Trust(HostCertificate cert) => this._trustedHostCerts[cert.Host] = cert;

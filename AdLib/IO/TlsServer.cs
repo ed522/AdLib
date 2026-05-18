@@ -44,7 +44,7 @@ public sealed class TlsServer : IDisposable
         IPAddress? ip = (tcpClient.Client.RemoteEndPoint as IPEndPoint)?.Address;
 
         NetworkStream networkStream = tcpClient.GetStream();
-        X509Certificate? clientCert = null;
+        X509Certificate2? clientCert = null;
         Certificate? realCert = null;
         TlsUtils.ConnectionResult result = TlsUtils.ConnectionResult.Success;
         TlsUtils.RejectionReason reason = TlsUtils.RejectionReason.None;
@@ -75,9 +75,9 @@ public sealed class TlsServer : IDisposable
             PresentedCert = clientCert,
         };
 
-        bool Validate(object sender, X509Certificate? cert, X509Chain? _, SslPolicyErrors errors)
+        bool Validate(object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)
         {
-            return TlsUtils.ValidateCertificate(sender, cert, errors, this._trustStore, false,
+            return TlsUtils.ValidateCertificate(sender, cert, chain, errors, this._trustStore, false,
                 out result, out realCert, out clientCert);
         }
     }

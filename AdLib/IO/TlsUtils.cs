@@ -41,24 +41,44 @@ public static class TlsUtils
     private static readonly HashAlgorithmName CertHash = HashAlgorithmName.SHA3_256;
 
     public static bool ValidateCertificate(
-        object sender, X509Certificate? certificate, SslPolicyErrors sslPolicyErrors,
+        object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors,
         TrustStore trustedCerts, bool validateHostnames,
-        out ConnectionResult result, out Certificate? certInfo, out X509Certificate? presentedCert
+        out ConnectionResult result, out Certificate? certInfo, out X509Certificate2? presentedCert
     )
     {
-        // get a hold of the cert in user code
-        presentedCert = certificate;
+        // NOTE: do not use `certificate` directly since it lacks x509certificate2 props/methods
+        // get a hold of the cert in user code 
+        presentedCert = certificate is null ? null : new X509Certificate2(certificate);
 
         // not validated yet, so we can't return anything'
         certInfo = null;
-        // we can safely ignore a name mismatch - in fact, this is required because the server can change
-        // hostnames, and that would make a cert invalid
-        sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateNameMismatch;
 
-        if (certificate is null) // means server didn't even try to authenticate
+        if (presentedCert is null) // means server didn't even try to authenticate
         {
             result = ConnectionResult.BadCertificate;
             return false;
+        }
+
+        // we can safely ignore a name mismatch - in fact, this is required because the server can change
+        // hostnames, and that would make a cert invalid
+        sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateNameMismatch;
+        sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateChainErrors;
+
+        // ignore:
+        // - circular chains (self-signed)
+        // - group policy weirdness
+        // - self-signed roots
+        // - partial chains (self-signing again)
+        // - bad/no revocation server (bc they can't be revoked)
+        const X509ChainStatusFlags ignoredFlags =
+            X509ChainStatusFlags.Cyclic | X509ChainStatusFlags.NoIssuanceChainPolicy |
+            X509ChainStatusFlags.UntrustedRoot | X509ChainStatusFlags.PartialChain |
+            X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation;
+
+        // reassess chain to see if there'll be any non-ignored errors
+        if (chain?.ChainStatus.Any(s => (s.Status & ~ignoredFlags) != X509ChainStatusFlags.NoError) ?? false)
+        {
+            sslPolicyErrors |= SslPolicyErrors.RemoteCertificateChainErrors;
         }
 
         if (sender is string hostName)
@@ -89,22 +109,23 @@ public static class TlsUtils
             else
             {
                 // validate by thumbprint
-                Certificate[] possibleCerts = trustedCerts.AllTrustedCertificates.Where(c =>
-                    c.X509Cert.GetCertHash(CertHash) == certificate.GetCertHash(CertHash)
-                ).ToArray();
+                byte[] presentedCertHash = presentedCert.GetCertHash(CertHash);
 
-                if (possibleCerts.Length == 0)
+                Certificate? possibleCert = 
+                    trustedCerts.GetCertificateByThumbprintOrDefault(presentedCertHash, CertHash);
+
+                if (possibleCert is null) // no match
                 {
                     // ^^
                     result = ConnectionResult.UntrustedCertificate;
                     return false;
                 }
 
-                cert = possibleCerts[0];
+                cert = possibleCert;
             }
 
-            X509Certificate2 clrCert = cert.X509Cert;
-            bool status = clrCert.GetCertHash(CertHash) == certificate.GetCertHash(CertHash);
+            X509Certificate2 realCert = cert.X509Cert;
+            bool status = realCert.GetCertHash(CertHash).SequenceEqual(presentedCert.GetCertHash(CertHash));
 
             if (status)
             {
@@ -117,19 +138,17 @@ public static class TlsUtils
             // spoof us - do not trust, do not ask for confirmation
             result = ConnectionResult.MismatchedCertificate;
             return false;
-
         }
         // should be unreachable
 
         // idk
         result = ConnectionResult.UnspecifiedError;
-        throw new InvalidOperationException("Unreachable (sender is not a string)");
+        return false;
     }
 
     /// <summary>
     ///     Communicates with the specified remote host to get rejection reasons over an unsecured channel.
-    ///     The
-    ///     local host will both tell the remote host why it rejected the connection, and return a reason
+    ///     The local host will both tell the remote host why it rejected the connection, and return a reason
     ///     provided by the remote host (both if applicable).
     /// </summary>
     /// <param name="client">the client to communicate over</param>
@@ -164,7 +183,7 @@ public static class TlsUtils
         public ConnectionResult Result;
         public RejectionReason Reason;
         public string Hostname;
-        public X509Certificate? PresentedCert;
+        public X509Certificate2? PresentedCert;
         public TcpClient? InsecureClient;
         public SslStream? SslStream;
         public Certificate? Certificate;

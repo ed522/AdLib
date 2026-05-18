@@ -40,7 +40,8 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
         this._tcpClient.Connect(host, PORT);
 
         ConnectionResult result = ConnectionResult.DidNotAttempt;
-        X509Certificate? cert = null;
+        X509Certificate2? presentedCert = null;
+        Certificate? realCert = null;
         RejectionReason reason = RejectionReason.None;
 
         this.SslStream = new SslStream(this._tcpClient.GetStream(), true, Validate);
@@ -66,14 +67,16 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
             Hostname = host,
             SslStream = this.SslStream,
             InsecureClient = this._tcpClient,
-            Certificate = cert,
+            Certificate = realCert,
+            PresentedCert = presentedCert,
             Reason = reason,
         };
 
         // for the `result` capture
-        bool Validate(object sender, X509Certificate? certificate, X509Chain? _, SslPolicyErrors errors)
+        bool Validate(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors errors)
         {
-            return ValidateCertificate(sender, certificate, errors, this._trustedCerts, out result, out cert);
+            return ValidateCertificate(sender, certificate, chain, errors, trustedCerts, false,
+                out result, out realCert, out presentedCert);
         }
     }
 
