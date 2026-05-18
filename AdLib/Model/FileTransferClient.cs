@@ -309,6 +309,7 @@ public sealed class FileTransferClient : IDisposable
         this._tlsClient?.Dispose();
         this._tlsClient = null;
         this._cancellationTokenSource.Cancel();
+        this._cancellationTokenSource.Dispose();
         this.IsConnected = false;
     }
 
