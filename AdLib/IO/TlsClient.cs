@@ -79,6 +79,4 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
                 out result, out realCert, out presentedCert);
         }
     }
-
-    public void TrustCertificate(HostCertificate cert) => trustedCerts.Trust(cert);
 }

@@ -81,6 +81,4 @@ public sealed class TlsServer : IDisposable
                 out result, out realCert, out clientCert);
         }
     }
-
-    public void TrustCertificate(Certificate cert) { this._trustStore.Trust(cert); }
 }
