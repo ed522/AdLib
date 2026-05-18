@@ -55,21 +55,11 @@ public sealed class FileTransferClient : IDisposable
             {
                 this._tlsClient = new TlsClient(identity, new TrustStore()); // TODO load certificates
                 TlsUtils.ConnectionInfo info = this._tlsClient.Connect(host);
+                TlsConnection? connection = info.Connection;
                 TlsUtils.ConnectionResult result = info.Result;
                 TlsUtils.RejectionReason reason = info.Reason;
 
-                // sanity checks
-                // NOTE: do not use this.ForceDisconnect() here, it will attempt to send an error message
-                // but we aren't connected until the event is fired
-                if (this._tlsClient.SslStream is null)
-                {
-                    InvalidOperationException ex = new("TLS stream is null after creation");
-                    this.CloseAfterError(ex);
-                    throw ex;
-                }
-
-                // lets implementation pop up an error box, or show the fingerprint to help in adding a new
-                // cert
+                // connection failed - raise the event then bail (stream is expected to be null) - does not return
                 if (result != TlsUtils.ConnectionResult.Success || reason != TlsUtils.RejectionReason.None)
                 {
                     // note: PresentedCert is the one the server offered, Certificate is the one that we have
@@ -84,6 +74,14 @@ public sealed class FileTransferClient : IDisposable
                     // handles adding trust, showing fingerprint, error dialogues etc.
                     this.CertificateError?.Invoke(host, info.Certificate, info.PresentedCert, result, reason);
                     return;
+                }
+                // quick sanity check
+                if (connection is null || this._tlsClient.SslStream is null)
+                {
+                    // stream is null but no error was thrown - this is a bug
+                    InvalidOperationException ex = new("TLS connection is null after creation");
+                    this.CloseAfterError(ex);
+                    throw ex;
                 }
 
                 this.IsConnected = true;

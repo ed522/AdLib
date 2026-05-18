@@ -184,8 +184,7 @@ public static class TlsUtils
         public RejectionReason Reason;
         public string Hostname;
         public X509Certificate2? PresentedCert;
-        public TcpClient? InsecureClient;
-        public SslStream? SslStream;
+        public TlsConnection? Connection;
         public Certificate? Certificate;
     }
 }

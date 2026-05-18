@@ -40,28 +40,28 @@ public sealed class TlsServer : IDisposable
 
     public TlsUtils.ConnectionInfo AcceptClient()
     {
-        TcpClient? tcpClient = this._listener.AcceptTcpClient();
+        TcpClient tcpClient = this._listener.AcceptTcpClient();
         IPAddress? ip = (tcpClient.Client.RemoteEndPoint as IPEndPoint)?.Address;
 
-        NetworkStream networkStream = tcpClient.GetStream();
         X509Certificate2? clientCert = null;
         Certificate? realCert = null;
         TlsUtils.ConnectionResult result = TlsUtils.ConnectionResult.Success;
         TlsUtils.RejectionReason reason = TlsUtils.RejectionReason.None;
 
-        SslStream? sslStream = new(networkStream, true, Validate);
+        SslStream sslStream = new(tcpClient.GetStream(), true, Validate);
+        TlsConnection? connection;
 
         try
         {
             sslStream.AuthenticateAsServer(this._identity.ClrCert, true, SslProtocols.Tls13, true);
+            connection = new TlsConnection(tcpClient, sslStream);
         }
         catch (AuthenticationException)
         {
             reason = TlsUtils.CommunicateRejection(tcpClient, result);
             tcpClient.Dispose();
-            tcpClient = null;
             sslStream.Dispose();
-            sslStream = null;
+            connection = null;
         }
 
         return new TlsUtils.ConnectionInfo
@@ -69,8 +69,7 @@ public sealed class TlsServer : IDisposable
             Result = result,
             Reason = reason,
             Hostname = ip?.ToString() ?? "<unknown>",
-            InsecureClient = tcpClient,
-            SslStream = sslStream,
+            Connection = connection,
             Certificate = realCert,
             PresentedCert = clientCert,
         };

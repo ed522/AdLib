@@ -19,26 +19,21 @@ public sealed partial class FileTransferServer
         private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
         private readonly CancellationToken _cancellationToken;
 
-        /// <summary>
-        ///     UNENCRYPTED TCP, do not use for anything except disposal
-        /// </summary>
-        private readonly TcpClient _insecureStream;
+        private readonly TlsConnection _connection;
 
         private readonly Random _random = new();
         private readonly string _rootPath;
 
-        private readonly SslStream _sslStream;
         private bool _isDisconnected;
         private bool _hasRunDisconnect;
 
         internal ClientHandler(
-            ClientInfo info, SslStream sslStream, TcpClient insecureStream, string rootPath,
+            ClientInfo info, TlsConnection connection, string rootPath,
             CancellationToken cancellationToken
         )
         {
             this.Info = info;
-            this._sslStream = sslStream;
-            this._insecureStream = insecureStream;
+            this._connection = connection;
             this._cancellationToken = cancellationToken;
             this._rootPath = rootPath;
         }
@@ -54,8 +49,7 @@ public sealed partial class FileTransferServer
 
         public void Dispose()
         {
-            this._insecureStream.Dispose();
-            this._sslStream.Dispose();
+            this._connection.Dispose();
 
             foreach ((string partPath, FileStream stream) in this._activeDownloads.Values)
             {
@@ -82,7 +76,7 @@ public sealed partial class FileTransferServer
             {
                 this._hasRunDisconnect = false;
                 // determines type
-                int headerByte = this._sslStream.ReadByte();
+                int headerByte = this._connection.SslStream.ReadByte();
 
                 if (headerByte == -1)
                 {
@@ -97,16 +91,16 @@ public sealed partial class FileTransferServer
                 }
 
                 InitMessage message1 = new();
-                message1.Deserialize(this._sslStream);
+                message1.Deserialize(this._connection.SslStream);
                 // no fields to check
 
                 // acknowledge
-                FileTransferUtils.SendMessage(this._sslStream, new InitAckMessage());
+                FileTransferUtils.SendMessage(this._connection.SslStream, new InitAckMessage());
 
                 while (!this._cancellationToken.IsCancellationRequested && !this._isDisconnected)
                 {
                     // the server never sends its own messages except as a consequence of a client's message
-                    this.HandleMessage(FileTransferUtils.ReadMessage(this._sslStream));
+                    this.HandleMessage(FileTransferUtils.ReadMessage(this._connection.SslStream));
                     Thread.Sleep(CommsLoopDelayMs);
                     Thread.Yield();
                 }
@@ -251,7 +245,7 @@ public sealed partial class FileTransferServer
 
         private void SendMessage(IMessage message)
         {
-            FileTransferUtils.SendMessage(this._sslStream, message);
+            FileTransferUtils.SendMessage(this._connection.SslStream, message);
         }
 
         private void SendListing(string path)

@@ -90,9 +90,8 @@ public sealed partial class FileTransferServer : IDisposable
                 try
                 {
                     TlsUtils.ConnectionInfo connectionInfo = this._tlsServer.AcceptClient();
-                    // client disposes streams in its Dispose, and that's called on thread exit
-                    SslStream? sslStream = connectionInfo.SslStream;
-                    TcpClient? insecureStream = connectionInfo.InsecureClient;
+                    // client disposes connection in its Dispose, and that's called on thread exit
+                    TlsConnection? connection = connectionInfo.Connection;
 
                     string host = connectionInfo.Hostname;
                     Certificate? cert = connectionInfo.Certificate;
@@ -113,7 +112,7 @@ public sealed partial class FileTransferServer : IDisposable
                         continue;
                     }
 
-                    if (sslStream is null || insecureStream is null)
+                    if (connection is null)
                     {
                         continue; // failed to connect
                     }
@@ -130,7 +129,7 @@ public sealed partial class FileTransferServer : IDisposable
                                                                           "this is a bug"),
                     };
 
-                    ClientHandler handler = new(clientInfo, sslStream, insecureStream, this._rootPath,
+                    ClientHandler handler = new(clientInfo, connection, this._rootPath,
                         this._cancellationTokenSource.Token);
 
                     // forward all events to our subscribers (but give them the client info)
