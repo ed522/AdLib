@@ -8,11 +8,13 @@ namespace AdLib.Identities;
 
 public class IdentityStore
 {
+    private readonly bool _isClient;
     private readonly Dictionary<string, IdentityMetadata> _availableIdentities = [];
     private readonly List<Identity> _unlockedIdentities = [];
 
-    public IdentityStore(string folderPath)
+    public IdentityStore(string folderPath, bool isClient)
     {
+        this._isClient = isClient;
         const string fileExtension = IdentityMetadata.FILE_EXTENSION;
         this.FolderPath = folderPath;
 
@@ -54,7 +56,7 @@ public class IdentityStore
             return possibleExisting;
         }
 
-        Identity identity = new(metadata, friendlyName, password);
+        Identity identity = Identity.CreateNew(this.FolderPath, friendlyName, password, this._isClient);
         this._unlockedIdentities.Add(identity);
         return identity;
     }
