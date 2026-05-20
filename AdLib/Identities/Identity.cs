@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using AdLib.Cryptography;
@@ -16,8 +17,8 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 
-using X509Certificate = Org.BouncyCastle.X509.X509Certificate;
-using ClrX509Certificate = System.Security.Cryptography.X509Certificates.X509Certificate;
+using BcX509Certificate = Org.BouncyCastle.X509.X509Certificate;
+using ClrX509Certificate = System.Security.Cryptography.X509Certificates.X509Certificate2;
 
 namespace AdLib.Identities;
 
@@ -30,11 +31,13 @@ public class Identity
     private static readonly DateTime ExpiryDate = new(9999, 12, 31);
 
     private Identity(
-        X509Certificate cert, AsymmetricKeyParameter privateKey, string friendlyName, string internalName
+        BcX509Certificate cert, AsymmetricKeyParameter privateKey, string friendlyName, string internalName
     )
     {
+        this.Ecdsa = ECDsa.Create();
+        this.Ecdsa.ImportECPrivateKey(PrivateKeyInfoFactory.CreatePrivateKeyInfo(privateKey).GetEncoded(), out _);
         this.Cert = cert;
-        this.ClrCert = X509CertificateLoader.LoadCertificate(cert.GetEncoded());
+        this.ClrCert = X509CertificateLoader.LoadCertificate(cert.GetEncoded()).CopyWithPrivateKey(this.Ecdsa);
         this.PrivateKey = privateKey;
         this.FriendlyName = friendlyName;
         this.InternalName = internalName;
@@ -49,9 +52,6 @@ public class Identity
             throw new InvalidOperationException("Failed to deserialize identity");
         }
 
-        this.Cert = new X509CertificateParser().ReadCertificate(metadata.Certificate);
-        this.ClrCert = X509CertificateLoader.LoadCertificate(metadata.Certificate);
-
         Lockbox box = Lockbox.DecryptLockbox(metadata.EncryptedPrivateKey, metadata.Certificate, password);
 
         this.PrivateKey = PrivateKeyFactory.CreateKey(
@@ -60,14 +60,23 @@ public class Identity
                 Asn1Object.FromByteArray(box.Data)
             )
         );
+        
+        this.Ecdsa = ECDsa.Create();
+        this.Ecdsa.ImportECPrivateKey(PrivateKeyInfoFactory.CreatePrivateKeyInfo(this.PrivateKey).GetEncoded(), out _);
+
+        this.Cert = new X509CertificateParser().ReadCertificate(metadata.Certificate);
+
+        this.ClrCert = X509CertificateLoader.LoadCertificate(metadata.Certificate)
+                                            .CopyWithPrivateKey(this.Ecdsa);
 
         this.FriendlyName = metadata.FriendlyName;
     }
 
-    public X509Certificate Cert { get; }
+    public BcX509Certificate Cert { get; }
     public ClrX509Certificate ClrCert { get; }
     public AsymmetricKeyParameter PrivateKey { get; }
     public string InternalName { get; }
+    public ECDsa Ecdsa { get; }
     public string FriendlyName { get; }
 
     public static Identity LoadFromFile(string storePath, string internalName, char[] password)
@@ -85,9 +94,16 @@ public class Identity
             throw new ArgumentException("Friendly name must not contain '='");
         }
 
-        ECKeyPairGenerator generator = new();
-        generator.Init(new Ed448KeyGenerationParameters(new SecureRandom()));
-        AsymmetricCipherKeyPair keyPair = generator.GenerateKeyPair();
+        ECKeyPairGenerator keyPairGenerator = new();
+
+        keyPairGenerator.Init(
+            new ECKeyGenerationParameters(
+                GetDomainParameters(NistNamedCurves.GetByName("secp384k1")),
+                new SecureRandom()
+            )
+        );
+        
+        AsymmetricCipherKeyPair keyPair = keyPairGenerator.GenerateKeyPair();
 
         // make cert
         X509V3CertificateGenerator certGenerator = new();
@@ -107,7 +123,7 @@ public class Identity
 
         // self-signed
         ISignatureFactory signatureFactory = new Asn1SignatureFactory("Ed448", keyPair.Private);
-        X509Certificate bcCert = certGenerator.Generate(signatureFactory);
+        BcX509Certificate bcCert = certGenerator.Generate(signatureFactory);
 
         Lockbox box = Lockbox.Create();
         box.Data = PrivateKeyInfoFactory.CreatePrivateKeyInfo(keyPair.Private).GetEncoded();
@@ -125,4 +141,7 @@ public class Identity
 
         return new Identity(bcCert, keyPair.Private, friendlyName, internalName);
     }
+
+    private static ECDomainParameters GetDomainParameters(X9ECParameters domainParameters) =>
+        new(domainParameters.Curve, domainParameters.G, domainParameters.N, domainParameters.H);
 }
