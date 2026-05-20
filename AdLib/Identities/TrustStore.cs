@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
@@ -49,6 +50,13 @@ public class TrustStore
             {
                 // load plaintext
                 Certificate cert = Certificate.LoadCertificate(file);
+                this.Trust(cert);
+            }
+            else
+            {
+                Lockbox box = Lockbox.DecryptLockbox(File.ReadAllBytes(file), [], password);
+                if (box.Data is null) throw new InvalidOperationException("Failed to decrypt lockbox");
+                Certificate cert = Certificate.LoadCertificate(box.Data);
                 this.Trust(cert);
             }
         }

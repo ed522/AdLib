@@ -22,11 +22,14 @@ public record Certificate
     
     public static Certificate LoadCertificate(string path)
     {
-        string jsonString = File.ReadAllText(path);
-
-        return JsonSerializer.Deserialize<Certificate>(jsonString, OPTIONS) ??
-               throw new InvalidOperationException($"Corrupted certificate {path}: got null");
+        byte[] json = File.ReadAllBytes(path);
+        return LoadCertificate(json, path);
     }
+
+    public static Certificate LoadCertificate(byte[] bytes, string? path = null) =>
+        JsonSerializer.Deserialize<Certificate>(Encoding.UTF8.GetString(bytes), OPTIONS) ??
+        throw new InvalidOperationException($"Corrupted certificate {path}: got null");
+
     public byte[] SerializeCertificate()
     {
         string jsonString = JsonSerializer.Serialize(this, OPTIONS);
