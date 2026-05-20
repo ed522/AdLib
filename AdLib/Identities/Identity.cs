@@ -6,8 +6,10 @@ using AdLib.Cryptography;
 
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.EdEC;
+using Org.BouncyCastle.Asn1.Nist;
 using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
@@ -30,8 +32,10 @@ public class Identity
     /// </summary>
     private static readonly DateTime ExpiryDate = new(9999, 12, 31);
 
+    private static string GetFileName(Guid internalName) => internalName.ToString("D");
+
     private Identity(
-        BcX509Certificate cert, AsymmetricKeyParameter privateKey, string friendlyName, string internalName
+        BcX509Certificate cert, AsymmetricKeyParameter privateKey, string friendlyName, Guid internalName
     )
     {
         this.Ecdsa = ECDsa.Create();
@@ -43,7 +47,7 @@ public class Identity
         this.InternalName = internalName;
     }
 
-    public Identity(IdentityMetadata metadata, string internalName, char[] password)
+    public Identity(IdentityMetadata metadata, Guid internalName, char[] password)
     {
         this.InternalName = internalName;
 
@@ -75,13 +79,13 @@ public class Identity
     public BcX509Certificate Cert { get; }
     public ClrX509Certificate ClrCert { get; }
     public AsymmetricKeyParameter PrivateKey { get; }
-    public string InternalName { get; }
     public ECDsa Ecdsa { get; }
+    public Guid InternalName { get; }
     public string FriendlyName { get; }
 
-    public static Identity LoadFromFile(string storePath, string internalName, char[] password)
+    public static Identity LoadFromFile(string storePath, Guid internalName, char[] password)
     {
-        IdentityMetadata metadata = IdentityMetadata.LoadMetadata(storePath, internalName);
+        IdentityMetadata metadata = IdentityMetadata.LoadMetadata(storePath, GetFileName(internalName));
         return new Identity(metadata, internalName, password);
     }
 
@@ -136,8 +140,22 @@ public class Identity
             FriendlyName = friendlyName,
         };
 
-        string internalName = metadata.GetSanitizedFileName();
-        metadata.WriteMetadata(storePath, internalName);
+        byte[] hash = bcCert.GetSha3Fingerprint()[..16];
+
+        // UUID format is xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+        // where y = 0b1000, 0b1001, 0b1010, 0b1011 (8 9 a b)
+        // uuid[7] is 4x
+        // uuid[8] is yx
+
+        // version (4 in binary)
+        hash[7] &= 0b0000_1111;
+        hash[7] |= 0b0100_0000;
+        // variant (10 is variant 1, which has 1 entire extra bit)
+        hash[8] &= 0b00_111111;
+        hash[8] |= 0b10_000000;
+        Guid internalName = new(hash);
+
+        metadata.WriteMetadata(storePath, GetFileName(internalName));
 
         return new Identity(bcCert, keyPair.Private, friendlyName, internalName);
     }

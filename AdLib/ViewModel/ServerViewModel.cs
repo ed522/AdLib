@@ -33,14 +33,15 @@ public partial class ServerViewModel : PageViewModelBase
         this._server.ClientConnected += (_, args) => this._connectedClients.Add(args.Client);
         this._server.ClientDisconnected += (_, args) => this._connectedClients.Remove(args.Client);
 
+        string localPath = Path.Combine(
+            ConfigDirectories.ServerLocallyTrustedIdentitiesPath,
+            identity.InternalName.ToString()
+        );
+
         TrustStore globalStore = new();
         TrustStore localStore = new();
         globalStore.Load(ConfigDirectories.ServerGloballyTrustedIdentitiesPath, null);
-
-        localStore.Load(
-            Path.Combine(ConfigDirectories.ServerLocallyTrustedIdentitiesPath, identity.InternalName),
-            password
-        );
+        localStore.Load(localPath, password);
 
         // server, so certificates shouldn't be associated with a host
         if (localStore.TrustedHostCertificates.Any() || globalStore.TrustedHostCertificates.Any())
