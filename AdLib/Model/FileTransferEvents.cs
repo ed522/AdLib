@@ -7,16 +7,18 @@ public class ConnectedEventArgs : EventArgs
     public ClientInfo? Client { get; set; }
 }
 
-public class FileReceivedEventArgs : EventArgs
+public class TransferFinishedEventArgs : EventArgs
 {
     public ClientInfo? Client { get; set; }
     public required string Path { get; init; }
+    public required bool IsSending { get; init; }
 }
 
-public class FileSentEventArgs : EventArgs
+public class TransferStartingEventArgs : EventArgs
 {
     public ClientInfo? Client { get; set; }
     public required string Path { get; init; }
+    public required bool IsSending { get; init; }
 }
 
 public class DisconnectedEventArgs : EventArgs

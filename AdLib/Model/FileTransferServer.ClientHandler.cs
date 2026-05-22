@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Security;
-using System.Net.Sockets;
 using System.Threading;
 
 using AdLib.IO;
@@ -44,8 +42,8 @@ public sealed partial class FileTransferServer
         public event EventHandler<DisconnectedEventArgs>? Disconnected;
         public event EventHandler<FatalErrorOccurredEventArgs>? FatalErrorOccurred;
         public event EventHandler<RecoverableErrorOccurredEventArgs>? RecoverableErrorOccurred;
-        public event EventHandler<FileReceivedEventArgs>? FileReceived;
-        public event EventHandler<FileSentEventArgs>? FileSent;
+        public event EventHandler<TransferStartingEventArgs>? TransferStarting;
+        public event EventHandler<TransferFinishedEventArgs>? TransferFinished;
 
         public void Dispose()
         {
@@ -128,7 +126,7 @@ public sealed partial class FileTransferServer
             finally
             {
                 this._isDisconnected = true;
-                
+
                 if (!Interlocked.CompareExchange(ref this._hasRunDisconnect, true, false))
                 {
                     this.Disconnected?.Invoke(this, new DisconnectedEventArgs());
@@ -144,8 +142,21 @@ public sealed partial class FileTransferServer
             {
                 case FileRequestMessage request:
                     this.CheckPath(request.Path);
+
+                    this.TransferStarting?.Invoke(this, new TransferStartingEventArgs
+                    {
+                        Path = request.Path,
+                        IsSending = true,
+                    });
+
                     FileTransferUtils.UploadPath(request.Path, request.Path, this.SendMessage);
-                    this.FileSent?.Invoke(this, new FileSentEventArgs { Path = request.Path });
+
+                    this.TransferFinished?.Invoke(this, new TransferFinishedEventArgs
+                    {
+                        Path = request.Path,
+                        IsSending = true,
+                    });
+
                     break;
 
                 case ListFilesMessage list:
@@ -178,6 +189,12 @@ public sealed partial class FileTransferServer
                 case DataMessage data:
                     this.CheckPath(data.Path);
 
+                    if (!this._activeDownloads.ContainsKey(data.Path))
+                    {
+                        this.TransferStarting?.Invoke(this,
+                            new TransferStartingEventArgs { Path = data.Path, IsSending = false });
+                    }
+
                     FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random,
                         this.SendMessage);
 
@@ -186,7 +203,9 @@ public sealed partial class FileTransferServer
                 case DataFinishedMessage finished:
                     this.CheckPath(finished.Path);
                     FileTransferUtils.FinalizeDownload(finished.Path, this._activeDownloads);
-                    this.FileReceived?.Invoke(this, new FileReceivedEventArgs { Path = finished.Path });
+
+                    this.TransferFinished?.Invoke(this,
+                        new TransferFinishedEventArgs { Path = finished.Path, IsSending = false });
                     break;
 
                 case EndMessage:

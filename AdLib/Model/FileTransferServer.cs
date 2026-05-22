@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Security;
-using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 
@@ -50,14 +48,14 @@ public sealed partial class FileTransferServer : IDisposable
     public event EventHandler<RecoverableErrorOccurredEventArgs>? RecoverableErrorOccurred;
 
     /// <summary>
-    ///     Called when a file is successfully received from a client.
+    ///     Called when a file transfer starts (either upload or download).
     /// </summary>
-    public event EventHandler<FileReceivedEventArgs>? FileReceived;
+    public event EventHandler<TransferStartingEventArgs>? TransferStarting;
 
     /// <summary>
-    ///     Called when a file is successfully sent to a client.
+    ///     Called when a file is successfully transferred to or from a client.
     /// </summary>
-    public event EventHandler<FileSentEventArgs>? FileSent;
+    public event EventHandler<TransferFinishedEventArgs>? TransferFinished;
 
     /// <summary>
     ///     Called when a client fails to authenticate for some reason. The certificate might be null if
@@ -168,21 +166,21 @@ public sealed partial class FileTransferServer : IDisposable
                         }
                     };
 
-                    handler.FileReceived += (sender, args) =>
+                    handler.TransferStarting += (sender, args) =>
                     {
                         if (sender is ClientHandler currentHandler)
                         {
                             args.Client = currentHandler.Info;
-                            this.FileReceived?.Invoke(currentHandler.Info, args);
+                            this.TransferStarting?.Invoke(this, args);
                         }
                     };
 
-                    handler.FileSent += (sender, args) =>
+                    handler.TransferFinished += (sender, args) =>
                     {
                         if (sender is ClientHandler currentHandler)
                         {
                             args.Client = currentHandler.Info;
-                            this.FileSent?.Invoke(currentHandler.Info, args);
+                            this.TransferFinished?.Invoke(currentHandler.Info, args);
                         }
                     };
 
