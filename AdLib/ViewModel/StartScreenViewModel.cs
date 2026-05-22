@@ -1,10 +1,14 @@
 ﻿using System;
+using System.Collections.ObjectModel;
 
 using AdLib.Config;
 using AdLib.Identities;
 using AdLib.View;
 
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
+using static AdLib.Identities.IdentityStore;
 
 namespace AdLib.ViewModel;
 
@@ -16,9 +20,28 @@ public partial class StartScreenViewModel : PageViewModelBase
     public string ClientTargetIp { get; set; } = "";
     public string ServerSharedFolder { get; set; } = "";
 
-    // TODO allow server identity switching
-    private static Guid _defaultServerIdentityName => 
-        throw new NotImplementedException("Unable to create a default server identity name");
+    public ObservableCollection<IdentityLabel> ServerAvailableIdentities { get; } = [];
+    public ObservableCollection<IdentityLabel> ClientAvailableIdentities { get; } = [];
+
+    [ObservableProperty] private IdentityLabel _serverSelectedIdentity;
+    [ObservableProperty] private IdentityLabel _clientSelectedIdentity;
+
+    public StartScreenViewModel()
+    {
+        IdentityStore clientStore = new(ConfigDirectories.ClientOwnedIdentitiesPath, true);
+
+        foreach (IdentityLabel label in clientStore.AvailableIdentities)
+        {
+            this.ClientAvailableIdentities.Add(label);
+        }
+
+        IdentityStore serverStore = new(ConfigDirectories.ServerOwnedIdentitiesPath, false);
+
+        foreach (IdentityLabel label in serverStore.AvailableIdentities)
+        {
+            this.ServerAvailableIdentities.Add(label);
+        }
+    }
 
     [RelayCommand]
     public void GoToClientScreen() =>
@@ -33,7 +56,7 @@ public partial class StartScreenViewModel : PageViewModelBase
 
         Identity identity = Identity.LoadFromFile(
             ConfigDirectories.ServerOwnedIdentitiesPath,
-            _defaultServerIdentityName,
+            this.ServerSelectedIdentity.InternalName,
             password
         );
 

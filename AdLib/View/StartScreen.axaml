@@ -11,22 +11,10 @@
         <viewModel:StartScreenViewModel />
     </Design.DataContext>
 
-    <Grid ColumnDefinitions="192,288"
-          HorizontalAlignment="Center" VerticalAlignment="Top">
+    <Grid ColumnDefinitions="*,2*"
+          HorizontalAlignment="Center" VerticalAlignment="Top"
+          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
 
-        <Grid.RowDefinitions>
-            <!-- header --> <RowDefinition Height="Auto" />
-            <!-- gap    --> <RowDefinition Height="16" />
-            <!-- input  --> <RowDefinition Height="Auto" />
-            <!-- input  --> <RowDefinition Height="Auto" />
-            <!-- button --> <RowDefinition Height="Auto" />
-            <!-- gap    --> <RowDefinition Height="48" />
-            <!-- input  --> <RowDefinition Height="Auto" />
-            <!-- input  --> <RowDefinition Height="Auto" />
-            <!-- button --> <RowDefinition Height="Auto" />
-            <!-- gap    --> <RowDefinition Height="48" />
-            <!-- button --> <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
         <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="h1">
             AdLib - Welcome
         </TextBlock>
@@ -61,13 +49,27 @@
             This host's IP: 12.34.56.78
         </TextBlock>
 
-        <Button Grid.Row="8" Grid.Column="0" Classes="submit" Command="{Binding GoToServerScreenCommand}">
+        <TextBlock Grid.Row="8" Grid.Column="0" Classes="input-label">
+            Identity:
+        </TextBlock>
+        <ComboBox Grid.Row="8" Grid.Column="1"
+                  ItemsSource="{Binding ServerAvailableIdentities}" SelectedItem="{Binding ServerSelectedIdentity}"
+                  Classes="input-data" PlaceholderText="Select an identity">
+            <ComboBoxItem Name="Create">Create new...</ComboBoxItem>
+            <ComboBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding FriendlyName}" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Button Grid.Row="9" Grid.Column="0" Classes="submit" Command="{Binding GoToServerScreenCommand}">
             Share Folder
         </Button>
 
-        <Separator Grid.Row="9" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major" />
+        <Separator Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major" />
 
-        <StackPanel Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+        <StackPanel Grid.Row="11" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
                     HorizontalAlignment="Center">
             <Button Classes="submit" Command="{Binding GoToSettingsScreenCommand}">Configure</Button>
             <Button Classes="submit" Command="{Binding GoToAboutScreenCommand}">About</Button>
