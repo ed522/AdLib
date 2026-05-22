@@ -8,11 +8,6 @@ public class IdentityMetadata
 {
     public const string FILE_EXTENSION = ".adi";
 
-    public static readonly JsonSerializerOptions OPTIONS = new()
-    {
-        WriteIndented = true,
-    };
-
     public required Guid InternalName { get; init; }
     public required byte[] Certificate { get; init; }
     public required byte[] EncryptedPrivateKey { get; init; }
@@ -21,17 +16,17 @@ public class IdentityMetadata
     public static IdentityMetadata LoadMetadata(string storePath, string fileName)
     {
         string fullPath = Path.Combine(storePath, fileName + FILE_EXTENSION);
-        string jsonString = File.ReadAllText(fullPath);
+        byte[] jsonBytes = File.ReadAllBytes(fullPath);
 
-        return JsonSerializer.Deserialize<IdentityMetadata>(jsonString, OPTIONS) ??
+        return JsonSerializer.Deserialize(jsonBytes, SourceGenerationContext.Default.IdentityMetadata) ??
                throw new InvalidOperationException($"Corrupted identity {fullPath}: got null");
     }
 
     public void WriteMetadata(string storePath, string fileName)
     {
         string fullPath = Path.Combine(storePath, fileName + FILE_EXTENSION);
-        string jsonString = JsonSerializer.Serialize(this, OPTIONS);
-        File.WriteAllText(fullPath, jsonString);
+        byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(this, SourceGenerationContext.Default.IdentityMetadata);
+        File.WriteAllBytes(fullPath, jsonBytes);
     }
 
     public string GetSanitizedFileName() =>
