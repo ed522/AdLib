@@ -1,6 +1,6 @@
 using System;
 
-using AdLib.ViewModel;
+using AdLib.ViewModel.Core;
 
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;

@@ -1,6 +1,7 @@
 using System;
 
 using AdLib.View;
+using AdLib.ViewModel.Core;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -8,7 +9,7 @@ namespace AdLib.ViewModel;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
-    [ObservableProperty] private ObservableObject _currentPage;
+    [ObservableProperty] private PageViewModel _currentPage;
     [ObservableProperty] private string _title = "AdLib";
 
     public MainWindowViewModel()
@@ -20,7 +21,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public override Type ViewType => typeof(MainWindow);
 
-    private void HandlePageChange(PageViewModelBase arg)
+    private void HandlePageChange(PageViewModel arg)
     {
         arg.OnPageChanged += (_ /* sender */, next) => this.HandlePageChange(next);
         this.Title = $"AdLib - {arg.Title}";

@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using AdLib.Config;
 using AdLib.Identities;
 using AdLib.View;
+using AdLib.ViewModel.Core;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,7 +13,7 @@ using static AdLib.Identities.IdentityStore;
 
 namespace AdLib.ViewModel;
 
-public partial class StartScreenViewModel : PageViewModelBase
+public partial class StartScreenViewModel : PageViewModel
 {
     public override Type ViewType => typeof(StartScreen);
     public override string Title => "Welcome";

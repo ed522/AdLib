@@ -9,6 +9,7 @@ using AdLib.Config;
 using AdLib.Identities;
 using AdLib.Model;
 using AdLib.View;
+using AdLib.ViewModel.Core;
 
 using Avalonia.Threading;
 
@@ -17,7 +18,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AdLib.ViewModel;
 
-public partial class ServerViewModel : PageViewModelBase
+public partial class ServerViewModel : PageViewModel
 {
     public record struct ActiveTransfer
     {
