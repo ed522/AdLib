@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -166,6 +167,7 @@ public partial class ServerViewModel : PageViewModel
         this._server.Start(identity, globalStore.Combine(localStore), sharedFolder);
     }
 
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public override Type ViewType => typeof(ServerScreen);
     public override string Title => "Hosting Server";
 

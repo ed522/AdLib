@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 using AdLib.View;
 using AdLib.ViewModel.Core;
@@ -9,6 +10,9 @@ namespace AdLib.ViewModel;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    public override Type ViewType => typeof(MainWindow);
+    
     [ObservableProperty] private PageViewModel _currentPage;
     [ObservableProperty] private string _title = "AdLib";
 
@@ -18,8 +22,6 @@ public partial class MainWindowViewModel : ViewModelBase
         // the null check)
         this.HandlePageChange(new StartScreenViewModel());
     }
-
-    public override Type ViewType => typeof(MainWindow);
 
     private void HandlePageChange(PageViewModel arg)
     {

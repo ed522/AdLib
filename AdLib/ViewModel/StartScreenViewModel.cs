@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 
 using AdLib.Config;
 using AdLib.Identities;
@@ -15,17 +16,9 @@ namespace AdLib.ViewModel;
 
 public partial class StartScreenViewModel : PageViewModel
 {
-    public override Type ViewType => typeof(StartScreen);
-    public override string Title => "Welcome";
-
-    public string ClientTargetIp { get; set; } = "";
-    public string ServerSharedFolder { get; set; } = "";
-
-    public ObservableCollection<IdentityLabel> ServerAvailableIdentities { get; } = [];
-    public ObservableCollection<IdentityLabel> ClientAvailableIdentities { get; } = [];
+    [ObservableProperty] private IdentityLabel _clientSelectedIdentity;
 
     [ObservableProperty] private IdentityLabel _serverSelectedIdentity;
-    [ObservableProperty] private IdentityLabel _clientSelectedIdentity;
 
     public StartScreenViewModel()
     {
@@ -43,6 +36,17 @@ public partial class StartScreenViewModel : PageViewModel
             this.ServerAvailableIdentities.Add(label);
         }
     }
+
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    public override Type ViewType => typeof(StartScreen);
+
+    public override string Title => "Welcome";
+
+    public string ClientTargetIp { get; set; } = "";
+    public string ServerSharedFolder { get; set; } = "";
+
+    public ObservableCollection<IdentityLabel> ServerAvailableIdentities { get; } = [];
+    public ObservableCollection<IdentityLabel> ClientAvailableIdentities { get; } = [];
 
     [RelayCommand]
     public void GoToClientScreen() =>
