@@ -44,13 +44,26 @@
         </Style>
 
         <Style Selector="Separator.separator-major">
-            <Setter Property="Margin" Value="8" />
+            <Setter Property="Margin" Value="8, 6" />
+            <Setter Property="Background" Value="#727272" />
         </Style>
         <Style Selector="Separator.separator-minor">
-            <Setter Property="Margin" Value="8, 0" />
-            <Setter Property="Foreground" Value="#555555" />
+            <Setter Property="Margin" Value="8, 12" />
+            <Setter Property="Background" Value="#454555" />
         </Style>
 
+        <Style Selector="Separator.separator-blank-small">
+            <Setter Property="Background" Value="#00000000" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Height" Value="16" />
+        </Style>
+
+        <Style Selector="ContentControl.content">
+            <Setter Property="Padding" Value="8, 8, 8, 16" />
+            <Setter Property="Margin" Value="20" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#404050" /> <!---->
+        </Style>
         <Style Selector="Window">
             <Setter Property="Padding" Value="16.0" />
             <Setter Property="Background" Value="#252530" />
