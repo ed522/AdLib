@@ -23,10 +23,11 @@
         <PackageReference Include="System.IO.Hashing" Version="10.0.7"/>
     </ItemGroup>
 
-    <ItemGroup>
-        <Compile Update="View\StartScreen.axaml.cs">
-            <DependentUpon>StartScreen.axaml</DependentUpon>
-            <SubType>Code</SubType>
-        </Compile>
-    </ItemGroup>
+    <PropertyGroup>
+        <PublishAot>true</PublishAot>
+        <IsAotCompatible>true</IsAotCompatible>
+        <PublishTrimmed>true</PublishTrimmed>
+        <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    </PropertyGroup>
+
 </Project>
