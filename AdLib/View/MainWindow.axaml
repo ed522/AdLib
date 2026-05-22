@@ -6,7 +6,7 @@
         x:DataType="viewModel:MainWindowViewModel"
         mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
         x:Class="AdLib.View.MainWindow"
-        Title="AdLib">
+        Title="{Binding Title}">
     <Design.DataContext>
         <viewModel:MainWindowViewModel />
     </Design.DataContext>

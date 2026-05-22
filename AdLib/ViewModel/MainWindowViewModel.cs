@@ -9,6 +9,7 @@ namespace AdLib.ViewModel;
 public partial class MainWindowViewModel : ViewModelBase
 {
     [ObservableProperty] private ObservableObject _currentPage;
+    [ObservableProperty] private string _title = "AdLib";
 
     public MainWindowViewModel()
     {
@@ -22,6 +23,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void HandlePageChange(PageViewModelBase arg)
     {
         arg.OnPageChanged += (_ /* sender */, next) => this.HandlePageChange(next);
+        this.Title = $"AdLib - {arg.Title}";
         this.CurrentPage = arg;
     }
 }
