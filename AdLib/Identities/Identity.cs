@@ -47,9 +47,9 @@ public class Identity
         this.InternalName = internalName;
     }
 
-    public Identity(IdentityMetadata metadata, Guid internalName, char[] password)
+    public Identity(IdentityMetadata metadata, char[] password)
     {
-        this.InternalName = internalName;
+        this.InternalName = metadata.InternalName;
 
         if (metadata == null)
         {
@@ -86,7 +86,14 @@ public class Identity
     public static Identity LoadFromFile(string storePath, Guid internalName, char[] password)
     {
         IdentityMetadata metadata = IdentityMetadata.LoadMetadata(storePath, GetFileName(internalName));
-        return new Identity(metadata, internalName, password);
+
+        if (internalName != metadata.InternalName)
+        {
+            throw new InvalidOperationException($"Tried to load identity {internalName} but instead found " +
+                                                $"{metadata.InternalName} at its expected location");
+        }
+
+        return new Identity(metadata, password);
     }
 
     public static Identity CreateNew(
@@ -129,6 +136,8 @@ public class Identity
         ISignatureFactory signatureFactory = new Asn1SignatureFactory("Ed448", keyPair.Private);
         BcX509Certificate bcCert = certGenerator.Generate(signatureFactory);
 
+        Guid internalName = GetCertificateGuid(bcCert.GetEncoded());
+
         Lockbox box = Lockbox.Create();
         box.Data = PrivateKeyInfoFactory.CreatePrivateKeyInfo(keyPair.Private).GetEncoded();
         byte[] encryptedPrivateKey = box.EncryptNewLockbox(password, bcCert.GetEncoded());
@@ -138,26 +147,30 @@ public class Identity
             Certificate = bcCert.GetEncoded(),
             EncryptedPrivateKey = encryptedPrivateKey,
             FriendlyName = friendlyName,
+            InternalName = internalName,
+            
         };
 
-        byte[] hash = bcCert.GetSha3Fingerprint()[..16];
+        metadata.WriteMetadata(storePath, GetFileName(internalName));
 
+        return new Identity(bcCert, keyPair.Private, friendlyName, internalName);
+    }
+
+    public static Guid GetCertificateGuid(byte[] hash)
+    {
+        byte[] guid = hash[..16];
         // UUID format is xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
         // where y = 0b1000, 0b1001, 0b1010, 0b1011 (8 9 a b)
         // uuid[7] is 4x
         // uuid[8] is yx
 
         // version (4 in binary)
-        hash[7] &= 0b0000_1111;
-        hash[7] |= 0b0100_0000;
+        guid[7] &= 0b0000_1111;
+        guid[7] |= 0b0100_0000;
         // variant (10 is variant 1, which has 1 entire extra bit)
-        hash[8] &= 0b00_111111;
-        hash[8] |= 0b10_000000;
-        Guid internalName = new(hash);
-
-        metadata.WriteMetadata(storePath, GetFileName(internalName));
-
-        return new Identity(bcCert, keyPair.Private, friendlyName, internalName);
+        guid[8] &= 0b00_111111;
+        guid[8] |= 0b10_000000;
+        return new Guid(guid);
     }
 
     private static ECDomainParameters GetDomainParameters(X9ECParameters domainParameters) =>
