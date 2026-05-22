@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:AdLib.ViewModel"
              x:DataType="viewModel:ServerViewModel"
-             mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
              x:Class="AdLib.View.ServerScreen">
 
     <Design.DataContext>
@@ -42,11 +42,40 @@
             </TextBlock.Text>
         </TextBlock>
 
+        <Expander Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Header="Connected Clients"
+                  IsExpanded="True" HorizontalAlignment="Stretch" Margin="8,4">
+            <ItemsControl ItemsSource="{Binding ConnectedClients}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Classes="info-extra" Margin="16,2,8,2">
+                            <TextBlock.Text>
+                                <MultiBinding StringFormat="{}{0} ({1})">
+                                    <Binding Path="Certificate.FriendlyName" />
+                                    <Binding Path="RemoteEndPoint" />
+                                </MultiBinding>
+                            </TextBlock.Text>
+                        </TextBlock>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Expander>
+
+        <Expander Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Header="Active Transfers"
+                  IsExpanded="True" HorizontalAlignment="Stretch" Margin="8,4">
+            <ItemsControl ItemsSource="{Binding CurrentTransfers}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Classes="info-extra" Text="{Binding}" Margin="16,2,8,2" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Expander>
+
         <ProgressBar Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
                      Value="{Binding TransferProgress}" Minimum="0" Maximum="100"
                      Height="20" Margin="8,4" />
 
-        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor" />
+        <Separator Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor" />
 
         <StackPanel Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
                     HorizontalAlignment="Center">
