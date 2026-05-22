@@ -10,7 +10,7 @@ public class ConfigDirectories
 
     #region Directories
 
-    public static readonly string ConfigDirectory = Path.Combine(_configBase, "adlib");
+    public static readonly string ConfigDirectory = Path.Combine(_configBase, ".adlib");
 
     public static readonly string IdentitiesPath = Path.Combine(ConfigDirectory, "identity");
 
@@ -51,30 +51,20 @@ public class ConfigDirectories
 
     public static void SetupConfigDirectories()
     {
-        if (!Directory.Exists(ConfigDirectory)) Directory.CreateDirectory(ConfigDirectory);
+        Directory.CreateDirectory(ConfigDirectory);
 
-        if (!Directory.Exists(IdentitiesPath)) Directory.CreateDirectory(IdentitiesPath);
+        Directory.CreateDirectory(IdentitiesPath);
 
-        if (!Directory.Exists(ServerIdentitiesPath)) Directory.CreateDirectory(ServerIdentitiesPath);
+        Directory.CreateDirectory(ServerIdentitiesPath);
 
-        if (!Directory.Exists(ServerOwnedIdentitiesPath))
-            Directory.CreateDirectory(ServerOwnedIdentitiesPath);
+        Directory.CreateDirectory(ServerOwnedIdentitiesPath);
+        Directory.CreateDirectory(ServerGloballyTrustedIdentitiesPath);
+        Directory.CreateDirectory(ServerLocallyTrustedIdentitiesPath);
 
-        if (!Directory.Exists(ServerGloballyTrustedIdentitiesPath))
-            Directory.CreateDirectory(ServerGloballyTrustedIdentitiesPath);
+        Directory.CreateDirectory(ClientIdentitiesPath);
 
-        if (!Directory.Exists(ServerLocallyTrustedIdentitiesPath))
-            Directory.CreateDirectory(ServerLocallyTrustedIdentitiesPath);
-
-        if (!Directory.Exists(ClientIdentitiesPath)) Directory.CreateDirectory(ClientIdentitiesPath);
-
-        if (!Directory.Exists(ClientOwnedIdentitiesPath))
-            Directory.CreateDirectory(ClientOwnedIdentitiesPath);
-
-        if (!Directory.Exists(ClientGloballyTrustedIdentitiesPath))
-            Directory.CreateDirectory(ClientGloballyTrustedIdentitiesPath);
-
-        if (!Directory.Exists(ClientLocallyTrustedIdentitiesPath))
-            Directory.CreateDirectory(ClientLocallyTrustedIdentitiesPath);
+        Directory.CreateDirectory(ClientOwnedIdentitiesPath);
+        Directory.CreateDirectory(ClientGloballyTrustedIdentitiesPath);
+        Directory.CreateDirectory(ClientLocallyTrustedIdentitiesPath);
     }
 }
