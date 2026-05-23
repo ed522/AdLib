@@ -1,7 +1,7 @@
 # AdLib
 
 AdLib is an ad-hoc, minimal-setup filesharing solution designed for quick and secure peer-to-peer file transfers without
-the need for complex infrastructure or central servers. Security is built-in and
+the need for complex infrastructure or central servers. The protocol is secure by default and highly robust.
 
 <!-- screenshot: main screen -->
 
