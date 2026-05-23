@@ -1,0 +1,34 @@
+<ContentControl xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                x:Class="AdLib.View.Templates.ModalFrame">
+    <ContentControl.Template>
+        <ControlTemplate>
+            <Panel>
+                <!-- dimmed background -->
+                <Rectangle Fill="#000000" Opacity="0.7" ZIndex="0"
+                           HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+                <Border CornerRadius="8" ZIndex="1" Classes="background"
+                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel Orientation="Vertical" Classes="background">
+
+                        <Panel HorizontalAlignment="Stretch" Margin="0, 0, 0, 12">
+                            <TextBlock Classes="h2" Text="{TemplateBinding Title}"
+                                       HorizontalAlignment="Left" VerticalAlignment="Center" />
+
+                            <!-- only shows if the implementing element allows it -->
+                            <Button Classes="button-close"
+                                    IsVisible="{TemplateBinding CanCloseWithoutAction}"
+                                    Command="{TemplateBinding CloseCommand}" />
+                        </Panel>
+
+                        <!-- actual content -->
+                        <ContentPresenter
+                            Content="{TemplateBinding Content}" />
+
+                    </StackPanel>
+                </Border>
+            </Panel>
+        </ControlTemplate>
+    </ContentControl.Template>
+</ContentControl>

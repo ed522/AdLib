@@ -19,6 +19,14 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <Style Selector="TextBlock.h2">
+            <Setter Property="FontSize" Value="24.0" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
 
         <Style Selector="TextBlock.input-label">
             <Setter Property="Margin" Value="8, 4" />
@@ -36,6 +44,17 @@
         <Style Selector="Button.submit">
             <Setter Property="Margin" Value="4, 8" />
             <Setter Property="Padding" Value="6" />
+        </Style>
+
+        <Style Selector="Button.button-close">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="999999" /> <!-- fully rounded -->
+            <Setter Property="Background" Value="#101010" />
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Opacity" Value="0.5" />
+            <Setter Property="Content" Value="X" />
         </Style>
 
         <Style Selector="TextBlock.info-extra">
@@ -64,8 +83,14 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="#404050" /> <!---->
         </Style>
-        <Style Selector="Window">
+        <Style Selector=":is(ContentControl).background">
+            <Setter Property="Background" Value="#252530" />
+        </Style>
+        <Style Selector="Border.background">
             <Setter Property="Padding" Value="16.0" />
+            <Setter Property="Background" Value="#252530" />
+        </Style>
+        <Style Selector=":is(Panel).background">
             <Setter Property="Background" Value="#252530" />
         </Style>
     </Application.Styles>

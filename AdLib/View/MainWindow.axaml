@@ -3,13 +3,17 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModel="clr-namespace:AdLib.ViewModel"
-        x:DataType="viewModel:MainWindowViewModel"
+        x:DataType="viewModel:MainWindowViewModel" x:Class="AdLib.View.MainWindow"
         mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="720"
         SizeToContent="WidthAndHeight" CanResize="True"
-        x:Class="AdLib.View.MainWindow"
-        Title="{Binding Title}">
+        Title="{Binding Title}"
+        Classes="background">
     <Design.DataContext>
         <viewModel:MainWindowViewModel />
     </Design.DataContext>
-    <ContentControl Content="{Binding CurrentPage}" Classes="content" />
+    <Panel>
+        <TransitioningContentControl Content="{Binding CurrentModal}" ZIndex="1"
+                                     HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+        <ContentControl Content="{Binding CurrentPage}" Classes="content" ZIndex="0" />
+    </Panel>
 </Window>

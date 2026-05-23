@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:viewModel="clr-namespace:AdLib.ViewModel"
+             x:DataType="viewModel:NoModalViewModel"
+             x:Class="AdLib.View.NoModal">
+    <Design.DataContext>
+        <viewModel:NoModalViewModel />
+    </Design.DataContext>
+    <Panel />
+</UserControl>
