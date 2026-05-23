@@ -24,7 +24,7 @@
         <TextBlock Grid.Row="2" Grid.Column="0" Classes="input-label">
             Hostname:
         </TextBlock>
-        <TextBox Grid.Row="2" Grid.Column="1" Classes="input-data" Watermark="12.34.56.78"
+        <TextBox Grid.Row="2" Grid.Column="1" Classes="input-data" PlaceholderText="12.34.56.78"
                  Text="{Binding Path=ClientTargetIp}" />
         <TextBlock Grid.Row="3" Grid.Column="0" Classes="input-label">
             Identity:
@@ -42,7 +42,7 @@
         <TextBlock Grid.Row="6" Grid.Column="0" Classes="input-label">
             Shared folder path:
         </TextBlock>
-        <TextBox Grid.Row="6" Grid.Column="1" Classes="input-data" Watermark="/home/user/Documents"
+        <TextBox Grid.Row="6" Grid.Column="1" Classes="input-data" PlaceholderText="/home/user/Documents"
                  Text="{Binding ServerSharedFolder}" />
 
         <TextBlock Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Classes="info-extra">
