@@ -20,6 +20,9 @@ internal static class Program
 
     private static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
+#if DEBUG
+                     .WithDeveloperTools()
+#endif
                      .UsePlatformDetect()
                      .WithInterFont()
                      .LogToTrace();
