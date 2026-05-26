@@ -1,0 +1,23 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:AdLib.Controls">
+    <ControlTheme x:Key="{x:Type controls:ExtendedChoiceBox}" TargetType="controls:ExtendedChoiceBox">
+        <Setter Property="Template">
+            <ControlTemplate>
+
+                <DropDownButton Classes="input-data" Content="{TemplateBinding SelectedItem}">
+                    <DropDownButton.Flyout>
+                        <Flyout>
+                            <StackPanel Orientation="Vertical">
+                                <ContentPresenter Content="{TemplateBinding TopItem}" />
+                                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" />
+                                <ContentPresenter Content="{TemplateBinding BottomItem}" />
+                            </StackPanel>
+                        </Flyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>
