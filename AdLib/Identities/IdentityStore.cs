@@ -9,7 +9,7 @@ namespace AdLib.Identities;
 public class IdentityStore
 {
     public readonly record struct IdentityLabel(Guid InternalName, string FriendlyName);
-    
+
     private readonly bool _isClient;
     private readonly Dictionary<Guid, IdentityMetadata> _availableIdentities = [];
     private readonly Dictionary<Guid, IdentityLabel> _availableIdentityLabels = [];
@@ -36,6 +36,10 @@ public class IdentityStore
         foreach (string file in files)
         {
             IdentityMetadata meta = IdentityMetadata.LoadMetadata(folderPath, file);
+
+            this._availableIdentityLabels.Add(meta.InternalName,
+                new IdentityLabel(meta.InternalName, meta.FriendlyName));
+
             this._availableIdentities.Add(Identity.GetCertificateGuid(meta.Certificate), meta);
         }
     }
@@ -60,6 +64,21 @@ public class IdentityStore
 
         Identity identity = new(metadata, password);
         this._unlockedIdentities.Add(identity);
+        return identity;
+    }
+
+    public Identity CreateNewIdentity(string friendlyName, char[] password)
+    {
+        // creates + stores
+        Identity identity = Identity.CreateNew(this.FolderPath, friendlyName, password,
+            this._isClient, out IdentityMetadata meta);
+
+        this._availableIdentityLabels.Add(identity.InternalName,
+            new IdentityLabel(identity.InternalName, friendlyName));
+
+        this._availableIdentities.Add(identity.InternalName, meta);
+        this._unlockedIdentities.Add(identity);
+
         return identity;
     }
 
