@@ -11,6 +11,12 @@
 
     <Application.Styles>
         <FluentTheme />
+
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Foreground" Value="{x:Static root:App.TextBrush}" />
+        </Style>
+        
         <Style Selector="TextBlock.h1">
             <Setter Property="FontSize" Value="56.0" />
             <Setter Property="FontWeight" Value="ExtraBold" />
@@ -70,10 +76,20 @@
             <Setter Property="Background" Value="{x:Static root:App.SubtleLineBrush}" />
         </Style>
 
-        <Style Selector="Separator.separator-blank-small">
+        <Style Selector="Separator.separator-blank-16px">
             <Setter Property="Background" Value="#00000000" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="Height" Value="16" />
+        </Style>
+        <Style Selector="Separator.separator-blank-8px">
+            <Setter Property="Background" Value="#00000000" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Height" Value="8" />
+        </Style>
+
+        <Style Selector=":is(Panel).modal-buttons">
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
 
         <Style Selector="ContentControl.content">
