@@ -4,10 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 
 using AdLib.Cryptography;
 
-using Org.BouncyCastle.Asn1;
-using Org.BouncyCastle.Asn1.EdEC;
 using Org.BouncyCastle.Asn1.Nist;
-using Org.BouncyCastle.Asn1.Pkcs;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
@@ -15,7 +12,6 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Operators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
-using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Security;
 using Org.BouncyCastle.X509;
 
@@ -32,17 +28,22 @@ public class Identity
     /// </summary>
     private static readonly DateTime ExpiryDate = new(9999, 12, 31);
 
-    private static string GetFileName(Guid internalName) => internalName.ToString("D");
+    // not standard name (`secp256r1`), something like `P-256`
+    private static readonly ECCurve StandardCurve = ECCurve.NamedCurves.nistP256;
+    private const string NistStandardCurveName = "P-256";
+    private const string SignatureAlgorithm = "SHA256withECDSA";
+
+    private static string GetFileName(Guid internalName) =>
+        internalName.ToString("D") + IdentityMetadata.FILE_EXTENSION;
 
     private Identity(
-        BcX509Certificate cert, AsymmetricKeyParameter privateKey, string friendlyName, Guid internalName
+        BcX509Certificate cert, AsymmetricKeyParameter bcKey, ECDsa dotnetKeys, string friendlyName, Guid internalName
     )
     {
-        this.Ecdsa = ECDsa.Create();
-        this.Ecdsa.ImportECPrivateKey(PrivateKeyInfoFactory.CreatePrivateKeyInfo(privateKey).GetEncoded(), out _);
+        this.PrivateKey = bcKey;
+        this.Ecdsa = dotnetKeys;
         this.Cert = cert;
         this.ClrCert = X509CertificateLoader.LoadCertificate(cert.GetEncoded()).CopyWithPrivateKey(this.Ecdsa);
-        this.PrivateKey = privateKey;
         this.FriendlyName = friendlyName;
         this.InternalName = internalName;
     }
@@ -58,15 +59,10 @@ public class Identity
 
         Lockbox box = Lockbox.DecryptLockbox(metadata.EncryptedPrivateKey, metadata.Certificate, password);
 
-        this.PrivateKey = PrivateKeyFactory.CreateKey(
-            new PrivateKeyInfo(
-                new AlgorithmIdentifier(EdECObjectIdentifiers.id_Ed448),
-                Asn1Object.FromByteArray(box.Data)
-            )
-        );
-        
+        this.PrivateKey = PrivateKeyFactory.CreateKey(box.Data);
+
         this.Ecdsa = ECDsa.Create();
-        this.Ecdsa.ImportECPrivateKey(PrivateKeyInfoFactory.CreatePrivateKeyInfo(this.PrivateKey).GetEncoded(), out _);
+        this.Ecdsa.ImportECPrivateKey(box.Data, out _);
 
         this.Cert = new X509CertificateParser().ReadCertificate(metadata.Certificate);
 
@@ -96,8 +92,11 @@ public class Identity
         return new Identity(metadata, password);
     }
 
-    public static Identity CreateNew(
-        string storePath, string friendlyName, char[] password, bool isClient
+    public static Identity CreateNew(string storePath, string friendlyName, char[] password, bool isClient) =>
+        CreateNew(storePath, friendlyName, password, isClient, out _);
+
+    internal static Identity CreateNew(
+        string storePath, string friendlyName, char[] password, bool isClient, out IdentityMetadata metadata
     )
     {
         if (friendlyName.Contains('='))
@@ -109,16 +108,21 @@ public class Identity
 
         keyPairGenerator.Init(
             new ECKeyGenerationParameters(
-                GetDomainParameters(NistNamedCurves.GetByName("secp384k1")),
+                GetDomainParameters(NistNamedCurves.GetByName(NistStandardCurveName) ??
+                                    throw new InvalidOperationException("Cannot find SECP curve")),
                 new SecureRandom()
             )
         );
-        
-        AsymmetricCipherKeyPair keyPair = keyPairGenerator.GenerateKeyPair();
+
+        ECDsa ecdsa = ECDsa.Create(StandardCurve);
+        byte[] publicKeyInfo = ecdsa.ExportSubjectPublicKeyInfo();
+        byte[] privateKeyInfo = ecdsa.ExportPkcs8PrivateKey();
+        AsymmetricKeyParameter publicKey = PublicKeyFactory.CreateKey(publicKeyInfo);
+        AsymmetricKeyParameter privateKey = PrivateKeyFactory.CreateKey(privateKeyInfo);
 
         // make cert
         X509V3CertificateGenerator certGenerator = new();
-        certGenerator.SetPublicKey(keyPair.Public);
+        certGenerator.SetPublicKey(publicKey);
         certGenerator.SetSubjectDN(new X509Name("CN=" + friendlyName)); // only set CN
         certGenerator.SetIssuerDN(new X509Name("CN=" + friendlyName));
         certGenerator.SetNotBefore(DateTime.Now);
@@ -133,27 +137,26 @@ public class Identity
             new ExtendedKeyUsage(isClient ? KeyPurposeID.id_kp_clientAuth : KeyPurposeID.id_kp_serverAuth));
 
         // self-signed
-        ISignatureFactory signatureFactory = new Asn1SignatureFactory("Ed448", keyPair.Private);
+        ISignatureFactory signatureFactory = new Asn1SignatureFactory(SignatureAlgorithm, privateKey);
         BcX509Certificate bcCert = certGenerator.Generate(signatureFactory);
 
-        Guid internalName = GetCertificateGuid(bcCert.GetEncoded());
+        Guid internalName = GetCertificateGuid(bcCert.GetSha3Fingerprint());
 
         Lockbox box = Lockbox.Create();
-        box.Data = PrivateKeyInfoFactory.CreatePrivateKeyInfo(keyPair.Private).GetEncoded();
+        box.Data = privateKeyInfo;
         byte[] encryptedPrivateKey = box.EncryptNewLockbox(password, bcCert.GetEncoded());
 
-        IdentityMetadata metadata = new()
+        metadata = new IdentityMetadata
         {
             Certificate = bcCert.GetEncoded(),
             EncryptedPrivateKey = encryptedPrivateKey,
             FriendlyName = friendlyName,
             InternalName = internalName,
-            
         };
 
         metadata.WriteMetadata(storePath, GetFileName(internalName));
 
-        return new Identity(bcCert, keyPair.Private, friendlyName, internalName);
+        return new Identity(bcCert, privateKey, ecdsa, friendlyName, internalName);
     }
 
     public static Guid GetCertificateGuid(byte[] hash)

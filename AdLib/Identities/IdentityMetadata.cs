@@ -15,7 +15,7 @@ public class IdentityMetadata
 
     public static IdentityMetadata LoadMetadata(string storePath, string fileName)
     {
-        string fullPath = Path.Combine(storePath, fileName + FILE_EXTENSION);
+        string fullPath = Path.Combine(storePath, fileName);
         byte[] jsonBytes = File.ReadAllBytes(fullPath);
 
         return JsonSerializer.Deserialize(jsonBytes, SourceGenerationContext.Default.IdentityMetadata) ??
@@ -24,7 +24,7 @@ public class IdentityMetadata
 
     public void WriteMetadata(string storePath, string fileName)
     {
-        string fullPath = Path.Combine(storePath, fileName + FILE_EXTENSION);
+        string fullPath = Path.Combine(storePath, fileName);
         byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(this, SourceGenerationContext.Default.IdentityMetadata);
         File.WriteAllBytes(fullPath, jsonBytes);
     }
