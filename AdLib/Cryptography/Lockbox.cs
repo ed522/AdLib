@@ -75,18 +75,17 @@ public class Lockbox
         byte[] secretKey = new byte[SECRET_LENGTH];
         _hash.GenerateBytes(password, secretKey);
 
-        byte[] encryptedData = new byte[this.Data.Length + TAG_LENGTH]; // 128 bit tag
-
         // ChaCha20 is a solid stream cipher but the nonce is 96 bits, so it can't be randomized
         ChaCha20Poly1305 cryptEngine = new();
         cryptEngine.Init(true, new AeadParameters(new KeyParameter(secretKey), TAG_LENGTH * 8, this._iv));
 
-        // encrypt data with AAD
-        cryptEngine.ProcessBytes(this.Data, 0, this.Data.Length, encryptedData, 0);
-        cryptEngine.ProcessAadBytes(aad);
+        byte[] encryptedData = new byte[cryptEngine.GetOutputSize(this.Data.Length)]; // 128 bit tag
 
+        // encrypt data with AAD
+        cryptEngine.ProcessAadBytes(aad);
+        int processed = cryptEngine.ProcessBytes(this.Data, 0, this.Data.Length, encryptedData, 0);
         // adds tag after data
-        cryptEngine.DoFinal(this.Data, this.Data.Length);
+        cryptEngine.DoFinal(encryptedData, processed);
 
         byte[] total = new byte[encryptedData.Length + SECRET_LENGTH + IV_LENGTH];
         this._salt.CopyTo(total, 0);
@@ -142,13 +141,13 @@ public class Lockbox
 
         ChaCha20Poly1305 cryptEngine = new();
         cryptEngine.Init(false, new AeadParameters(new KeyParameter(secretKey), IV_LENGTH * 8, iv));
-        byte[] plaintext = new byte[data.Length - TAG_LENGTH];
+        byte[] plaintext = new byte[cryptEngine.GetOutputSize(data.Length)]; 
 
-        cryptEngine.ProcessBytes(data, 0, data.Length, plaintext, 0);
         cryptEngine.ProcessAadBytes(aad);
-        cryptEngine.DoFinal(plaintext, plaintext.Length);
+        int processed = cryptEngine.ProcessBytes(data, 0, data.Length, plaintext, 0);
+        cryptEngine.DoFinal(data, processed);
 
-        return new Lockbox(data, salt, iv);
+        return new Lockbox(plaintext, salt, iv);
     }
 
     public static Lockbox Create() => new(null, null, null);
