@@ -3,7 +3,7 @@ using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 
-namespace AdLib.View.Templates;
+namespace AdLib.Controls;
 
 public partial class ModalFrame : ContentControl
 {
