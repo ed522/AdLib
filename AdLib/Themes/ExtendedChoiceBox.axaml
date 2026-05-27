@@ -9,6 +9,7 @@
                   BasedOn="{StaticResource {x:Type Button}}">
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="Background" Value="#00000000" />
     </ControlTheme>
 
     <ControlTheme x:Key="{x:Type controls:ExtendedChoiceBox}"
