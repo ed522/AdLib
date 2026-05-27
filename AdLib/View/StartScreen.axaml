@@ -11,88 +11,95 @@
         <viewModel:StartScreenViewModel />
     </Design.DataContext>
 
-    <Grid ColumnDefinitions="*,2*"
-          HorizontalAlignment="Center" VerticalAlignment="Top"
-          RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Orientation="Vertical">
 
-        <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="h1">
+        <TextBlock Classes="h1">
             AdLib - Welcome
         </TextBlock>
 
-        <Separator Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major" />
+        <Separator Classes="separator-major" />
 
-        <TextBlock Grid.Row="2" Grid.Column="0" Classes="input-label">
-            Hostname:
-        </TextBlock>
-        <TextBox Grid.Row="2" Grid.Column="1" Classes="input-data" PlaceholderText="12.34.56.78"
-                 Text="{Binding Path=ClientTargetIp}" />
-        <TextBlock Grid.Row="3" Grid.Column="0" Classes="input-label">
-            Identity:
-        </TextBlock>
-        <c:ExtendedChoiceBox Grid.Row="3" Grid.Column="1" Classes="input-data"
-                             ItemsSource="{Binding ClientAvailableIdentities}"
-                             SelectedItem="{Binding ClientSelectedIdentity, Mode=OneWayToSource}"
-                             PlaceholderText="Select an identity">
-            <c:ExtendedChoiceBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding FriendlyName}" />
-                </DataTemplate>
-            </c:ExtendedChoiceBox.ItemTemplate>
+        <Panel Classes="input-field">
+            <TextBlock Classes="input-label">
+                Hostname:
+            </TextBlock>
+            <TextBox Classes="input-data" PlaceholderText="12.34.56.78"
+                     Text="{Binding Path=ClientTargetIp}" />
+        </Panel>
 
-            <c:ExtendedChoiceBox.BottomItem>
-                <Button Content="+ Create new..."
-                        Command="{Binding CreateNewClientIdentity}"
-                        HorizontalAlignment="Stretch" />
-            </c:ExtendedChoiceBox.BottomItem>
-        </c:ExtendedChoiceBox>
+        <Panel Classes="input-field">
+            <TextBlock Classes="input-label">
+                Identity:
+            </TextBlock>
+            <c:ExtendedChoiceBox Classes="input-data"
+                                 ItemsSource="{Binding ClientAvailableIdentities}"
+                                 SelectedItem="{Binding ClientSelectedIdentity, Mode=OneWayToSource}"
+                                 PlaceholderText="Select an identity">
+                <c:ExtendedChoiceBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding FriendlyName}" />
+                    </DataTemplate>
+                </c:ExtendedChoiceBox.ItemTemplate>
 
-        <Button Grid.Row="4" Grid.Column="0" Classes="submit" Command="{Binding GoToClientScreenCommand}">
+                <c:ExtendedChoiceBox.BottomItem>
+                    <Button Content="+ Create new..."
+                            Command="{Binding CreateNewClientIdentity}"
+                            HorizontalAlignment="Stretch" />
+                </c:ExtendedChoiceBox.BottomItem>
+            </c:ExtendedChoiceBox>
+        </Panel>
+
+        <Button Classes="button-highlight submit" Command="{Binding GoToClientScreenCommand}">
             Connect
         </Button>
 
-        <Separator Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-minor" />
+        <Separator Classes="separator-minor" />
 
-        <TextBlock Grid.Row="6" Grid.Column="0" Classes="input-label">
-            Shared folder path:
-        </TextBlock>
-        <TextBox Grid.Row="6" Grid.Column="1" Classes="input-data" PlaceholderText="/home/user/Documents"
-                 Text="{Binding ServerSharedFolder}" />
+        <Panel Classes="input-field">
+            <TextBlock Classes="input-label">
+                Shared folder path:
+            </TextBlock>
+            <TextBox Classes="input-data" PlaceholderText="/home/user/Documents"
+                     Text="{Binding ServerSharedFolder}" />
+        </Panel>
 
-        <TextBlock Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" Classes="info-extra">
+        <TextBlock Classes="info-extra">
             This host's IP: 12.34.56.78
         </TextBlock>
 
-        <TextBlock Grid.Row="8" Grid.Column="0" Classes="input-label">
-            Identity:
-        </TextBlock>
-        <c:ExtendedChoiceBox Grid.Row="8" Grid.Column="1" Classes="input-data"
-                             ItemsSource="{Binding ServerAvailableIdentities}"
-                             SelectedItem="{Binding ServerSelectedIdentity, Mode=OneWayToSource}"
-                             PlaceholderText="Select an identity">
-            <c:ExtendedChoiceBox.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding FriendlyName}" />
-                </DataTemplate>
-            </c:ExtendedChoiceBox.ItemTemplate>
+        <Panel Classes="input-field">
+            <TextBlock Classes="input-label">
+                Identity:
+            </TextBlock>
+            <c:ExtendedChoiceBox Classes="input-data"
+                                 ItemsSource="{Binding ServerAvailableIdentities}"
+                                 SelectedItem="{Binding ServerSelectedIdentity, Mode=OneWayToSource}"
+                                 PlaceholderText="Select an identity">
+                <c:ExtendedChoiceBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding FriendlyName}" />
+                    </DataTemplate>
+                </c:ExtendedChoiceBox.ItemTemplate>
 
-            <c:ExtendedChoiceBox.BottomItem>
-                <Button Content="+ Create new..."
-                        Command="{Binding CreateNewClientIdentity}"
-                        HorizontalAlignment="Stretch" />
-            </c:ExtendedChoiceBox.BottomItem>
-        </c:ExtendedChoiceBox>
+                <c:ExtendedChoiceBox.BottomItem>
+                    <Button Content="+ Create new..."
+                            Command="{Binding CreateNewClientIdentity}"
+                            HorizontalAlignment="Stretch" />
+                </c:ExtendedChoiceBox.BottomItem>
+            </c:ExtendedChoiceBox>
+        </Panel>
 
-        <Button Grid.Row="9" Grid.Column="0" Classes="submit" Command="{Binding GoToServerScreenCommand}">
+        <Button Classes="button-highlight submit" Command="{Binding GoToServerScreenCommand}">
             Share Folder
         </Button>
 
-        <Separator Grid.Row="10" Grid.Column="0" Grid.ColumnSpan="2" Classes="separator-major" />
+        <Separator Classes="separator-major" />
 
-        <StackPanel Grid.Row="11" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+        <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Center">
             <Button Classes="submit" Command="{Binding GoToSettingsScreenCommand}">Configure</Button>
             <Button Classes="submit" Command="{Binding GoToAboutScreenCommand}">About</Button>
         </StackPanel>
 
-    </Grid>
+    </StackPanel>
 </UserControl>

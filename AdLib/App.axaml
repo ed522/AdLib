@@ -32,8 +32,8 @@
         <Style Selector="TextBlock.h1">
             <Setter Property="FontSize" Value="56.0" />
             <Setter Property="FontWeight" Value="ExtraBold" />
-            <Setter Property="Padding" Value="0, 24.0" />
-            <Setter Property="Margin" Value="0, 8.0" />
+            <Setter Property="Padding" Value="24.0" />
+            <Setter Property="Margin" Value="8.0" />
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -45,10 +45,18 @@
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <Style Selector="TextBlock.text-accent">
+            <Setter Property="Foreground" Value="{x:Static root:App.AccentBrush}" />
+        </Style>
+
+        <Style Selector="Panel.input-field">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
 
         <Style Selector="TextBlock.input-label">
             <Setter Property="Margin" Value="8, 4" />
             <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="MaxHeight" Value="32" />
         </Style>
         <Style Selector=":is(Control).input-data">
@@ -60,7 +68,7 @@
         </Style>
 
         <Style Selector="Button.submit">
-            <Setter Property="Margin" Value="4, 8" />
+            <Setter Property="Margin" Value="8" />
             <Setter Property="Padding" Value="6" />
         </Style>
 
