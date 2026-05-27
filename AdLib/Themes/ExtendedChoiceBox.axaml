@@ -1,23 +1,67 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:controls="clr-namespace:AdLib.Controls">
-    <ControlTheme x:Key="{x:Type controls:ExtendedChoiceBox}" TargetType="controls:ExtendedChoiceBox">
+
+    <!-- Item container: inherits Button's theme so hover/press states work.
+         Content and ContentTemplate are set automatically by the framework. -->
+    <ControlTheme x:Key="ExtendedChoiceBoxItemTheme"
+                  TargetType="controls:ExtendedChoiceBoxItem"
+                  BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type controls:ExtendedChoiceBox}"
+                  TargetType="controls:ExtendedChoiceBox">
+
+        <Setter Property="ItemContainerTheme" Value="{StaticResource ExtendedChoiceBoxItemTheme}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        
         <Setter Property="Template">
             <ControlTemplate>
+                <Panel>
 
-                <DropDownButton Classes="input-data" Content="{TemplateBinding SelectedItem}">
-                    <DropDownButton.Flyout>
-                        <Flyout>
-                            <StackPanel Orientation="Vertical">
-                                <ContentPresenter Content="{TemplateBinding TopItem}" />
-                                <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" />
-                                <ContentPresenter Content="{TemplateBinding BottomItem}" />
+                    <!-- base button - shows currenlty selected -->
+                    <Button x:Name="PART_Button"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                        <Panel>
+                            <!-- placeholder only if item is null -->
+                            <TextBlock Text="{TemplateBinding PlaceholderText}" Opacity="0.7"
+                                       IsVisible="{TemplateBinding SelectedItem, Converter={x:Static ObjectConverters.IsNull}}" />
+                            <ContentPresenter Content="{TemplateBinding SelectedItem}"
+                                              ContentTemplate="{TemplateBinding ItemTemplate}"
+                                              IsVisible="{TemplateBinding SelectedItem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </Panel>
+                    </Button>
+
+                    <!-- popup part -->
+                    <Popup x:Name="PART_Popup"
+                           PlacementTarget="{TemplateBinding}" Placement="BottomEdgeAlignedLeft"
+                           MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                           IsLightDismissEnabled="True" WindowManagerAddShadowHint="False">
+                        <Border Background="{DynamicResource ComboBoxDropDownBackground}"
+                                BorderBrush="{DynamicResource ComboBoxDropDownBorderBrush}"
+                                BorderThickness="1" CornerRadius="4" Padding="4">
+                            <StackPanel Spacing="2">
+
+                                <!-- only show top/bottom items if they're present -->
+                                <ContentPresenter Content="{TemplateBinding TopItem}"
+                                                  IsVisible="{TemplateBinding TopItem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                                <!-- PART_ItemsPresenter is required for SelectingItemsControl internals -->
+                                <ItemsPresenter x:Name="PART_ItemsPresenter"
+                                                ItemsPanel="{TemplateBinding ItemsPanel}" />
+
+                                <ContentPresenter Content="{TemplateBinding BottomItem}"
+                                                  IsVisible="{TemplateBinding BottomItem, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
                             </StackPanel>
-                        </Flyout>
-                    </DropDownButton.Flyout>
-                </DropDownButton>
+                        </Border>
+                    </Popup>
 
+                </Panel>
             </ControlTemplate>
         </Setter>
     </ControlTheme>
+
 </ResourceDictionary>
