@@ -29,8 +29,9 @@
         <TextBlock Grid.Row="3" Grid.Column="0" Classes="input-label">
             Identity:
         </TextBlock>
-        <c:ExtendedChoiceBox Grid.Row="3" Grid.Column="1"
-                             ItemsSource="{Binding ClientAvailableIdentities}" SelectedItem="{Binding ClientSelectedIdentity, Mode=OneWayToSource}"
+        <c:ExtendedChoiceBox Grid.Row="3" Grid.Column="1" Classes="input-data"
+                             ItemsSource="{Binding ClientAvailableIdentities}"
+                             SelectedItem="{Binding ClientSelectedIdentity, Mode=OneWayToSource}"
                              PlaceholderText="Select an identity">
             <c:ExtendedChoiceBox.ItemTemplate>
                 <DataTemplate>
@@ -64,8 +65,9 @@
         <TextBlock Grid.Row="8" Grid.Column="0" Classes="input-label">
             Identity:
         </TextBlock>
-        <c:ExtendedChoiceBox Grid.Row="8" Grid.Column="1"
-                             ItemsSource="{Binding ServerAvailableIdentities}" SelectedItem="{Binding ServerSelectedIdentity, Mode=OneWayToSource}"
+        <c:ExtendedChoiceBox Grid.Row="8" Grid.Column="1" Classes="input-data"
+                             ItemsSource="{Binding ServerAvailableIdentities}"
+                             SelectedItem="{Binding ServerSelectedIdentity, Mode=OneWayToSource}"
                              PlaceholderText="Select an identity">
             <c:ExtendedChoiceBox.ItemTemplate>
                 <DataTemplate>
