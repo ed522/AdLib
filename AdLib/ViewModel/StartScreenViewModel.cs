@@ -17,25 +17,9 @@ namespace AdLib.ViewModel;
 public partial class StartScreenViewModel : PageViewModel
 {
     [ObservableProperty] private IdentityLabel _clientSelectedIdentity;
-
     [ObservableProperty] private IdentityLabel _serverSelectedIdentity;
 
-    public StartScreenViewModel()
-    {
-        IdentityStore clientStore = new(ConfigDirectories.ClientOwnedIdentitiesPath, true);
-
-        foreach (IdentityLabel label in clientStore.AvailableIdentities)
-        {
-            this.ClientAvailableIdentities.Add(label);
-        }
-
-        IdentityStore serverStore = new(ConfigDirectories.ServerOwnedIdentitiesPath, false);
-
-        foreach (IdentityLabel label in serverStore.AvailableIdentities)
-        {
-            this.ServerAvailableIdentities.Add(label);
-        }
-    }
+    public StartScreenViewModel() => this.RefreshIdentities();
 
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public override Type ViewType => typeof(StartScreen);
@@ -45,8 +29,53 @@ public partial class StartScreenViewModel : PageViewModel
     public string ClientTargetIp { get; set; } = "";
     public string ServerSharedFolder { get; set; } = "";
 
+    private readonly IdentityStore _clientStore = new(ConfigDirectories.ClientOwnedIdentitiesPath, true);
+    private readonly IdentityStore _serverStore = new(ConfigDirectories.ServerOwnedIdentitiesPath, false);
+
+    private void RefreshIdentities()
+    {
+        this.ClientAvailableIdentities.Clear();
+        this.ServerAvailableIdentities.Clear();
+
+        foreach (IdentityLabel label in this._clientStore.AvailableIdentities)
+        {
+            this.ClientAvailableIdentities.Add(label);
+        }
+
+        foreach (IdentityLabel label in this._serverStore.AvailableIdentities)
+        {
+            this.ServerAvailableIdentities.Add(label);
+        }
+    }
+
     public ObservableCollection<IdentityLabel> ServerAvailableIdentities { get; } = [];
     public ObservableCollection<IdentityLabel> ClientAvailableIdentities { get; } = [];
+
+    [RelayCommand]
+    public void CreateNewServerIdentity()
+    {
+        string friendlyName = "Test name"; // TODO get user input
+        char[] password = [];
+
+        Identity ident = this._serverStore.CreateNewIdentity(friendlyName, password);
+        this.ServerAvailableIdentities.Add(new IdentityLabel(ident.InternalName, ident.FriendlyName));
+    }
+
+    [RelayCommand]
+    public void CreateNewClientIdentity()
+    {
+        string friendlyName = "Test name"; // TODO get user input
+        char[] password = [];
+
+        Identity ident = this._clientStore.CreateNewIdentity(friendlyName, password);
+        this.ClientAvailableIdentities.Add(new IdentityLabel(ident.InternalName, ident.FriendlyName));
+    }
+
+    [RelayCommand]
+    public void SelectClientIdentityCommand(IdentityLabel label) => this.ClientSelectedIdentity = label;
+
+    [RelayCommand]
+    public void SelectServerIdentityCommand(IdentityLabel label) => this.ServerSelectedIdentity = label;
 
     [RelayCommand]
     public void GoToClientScreen() =>

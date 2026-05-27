@@ -1,11 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:c="clr-namespace:AdLib.Controls"
+             xmlns:blend="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:compat="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:AdLib.ViewModel"
-             x:DataType="viewModel:StartScreenViewModel"
-             mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
-             x:Class="AdLib.View.StartScreen">
+             x:DataType="viewModel:StartScreenViewModel" x:Class="AdLib.View.StartScreen"
+             compat:Ignorable="blend" blend:DesignWidth="1024" blend:DesignHeight="768">
 
     <Design.DataContext>
         <viewModel:StartScreenViewModel />
@@ -29,9 +29,21 @@
         <TextBlock Grid.Row="3" Grid.Column="0" Classes="input-label">
             Identity:
         </TextBlock>
-        <ComboBox Grid.Row="3" Grid.Column="1" Classes="input-data" PlaceholderText="Select an identity">
-            <ComboBoxItem>Create new...</ComboBoxItem>
-        </ComboBox>
+        <c:ExtendedChoiceBox Grid.Row="3" Grid.Column="1"
+                             ItemsSource="{Binding ClientAvailableIdentities}" SelectedItem="{Binding ClientSelectedIdentity, Mode=OneWayToSource}"
+                             PlaceholderText="Select an identity">
+            <c:ExtendedChoiceBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding FriendlyName}" />
+                </DataTemplate>
+            </c:ExtendedChoiceBox.ItemTemplate>
+
+            <c:ExtendedChoiceBox.BottomItem>
+                <Button Content="+ Create new..."
+                        Command="{Binding CreateNewClientIdentity}"
+                        HorizontalAlignment="Stretch" />
+            </c:ExtendedChoiceBox.BottomItem>
+        </c:ExtendedChoiceBox>
 
         <Button Grid.Row="4" Grid.Column="0" Classes="submit" Command="{Binding GoToClientScreenCommand}">
             Connect
@@ -52,16 +64,21 @@
         <TextBlock Grid.Row="8" Grid.Column="0" Classes="input-label">
             Identity:
         </TextBlock>
-        <ComboBox Grid.Row="8" Grid.Column="1"
-                  ItemsSource="{Binding ServerAvailableIdentities}" SelectedItem="{Binding ServerSelectedIdentity}"
-                  Classes="input-data" PlaceholderText="Select an identity">
-            <ComboBoxItem Name="Create">Create new...</ComboBoxItem>
-            <ComboBox.ItemTemplate>
+        <c:ExtendedChoiceBox Grid.Row="8" Grid.Column="1"
+                             ItemsSource="{Binding ServerAvailableIdentities}" SelectedItem="{Binding ServerSelectedIdentity, Mode=OneWayToSource}"
+                             PlaceholderText="Select an identity">
+            <c:ExtendedChoiceBox.ItemTemplate>
                 <DataTemplate>
                     <TextBlock Text="{Binding FriendlyName}" />
                 </DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
+            </c:ExtendedChoiceBox.ItemTemplate>
+
+            <c:ExtendedChoiceBox.BottomItem>
+                <Button Content="+ Create new..."
+                        Command="{Binding CreateNewClientIdentity}"
+                        HorizontalAlignment="Stretch" />
+            </c:ExtendedChoiceBox.BottomItem>
+        </c:ExtendedChoiceBox>
 
         <Button Grid.Row="9" Grid.Column="0" Classes="submit" Command="{Binding GoToServerScreenCommand}">
             Share Folder
