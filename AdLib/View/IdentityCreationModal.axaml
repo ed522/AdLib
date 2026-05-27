@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:AdLib.Controls"
+             xmlns:viewModel="clr-namespace:AdLib.ViewModel"
+             x:DataType="viewModel:IdentityCreationModalViewModel"
+             x:Class="AdLib.View.IdentityCreationModal">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.message">
+            <Setter Property="Margin" Value="8" />
+        </Style>
+        <Style Selector="Label">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="MaxWidth" Value="196" />
+            <Setter Property="MinWidth" Value="196" />
+            <Setter Property="Width" Value="196" />
+        </Style>
+    </UserControl.Styles>
+    <c:ModalFrame
+        Title="{Binding Title, Mode=OneTime}" CanCloseWithoutAction="{Binding CanCloseWithoutAction, Mode=OneTime}"
+        CloseCommand="{Binding Close}">
+        <StackPanel>
+            <Grid RowDefinitions="Auto,*,*" ColumnDefinitions="*,*">
+                <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Classes="message">
+                    Enter the information for your new identity:
+                </TextBlock>
+
+                <Label Grid.Row="1" Grid.Column="0" Target="PART_IdentityName">Name:</Label>
+                <TextBox Grid.Row="1" Grid.Column="1" Name="PART_IdentityName"
+                         Text="{Binding Name, Mode=OneWayToSource}" />
+
+                <Label Grid.Row="2" Grid.Column="0" Target="PART_IdentityPassword">Password:</Label>
+                <TextBox Grid.Row="2" Grid.Column="1" Name="PART_IdentityPassword" PasswordChar="•"
+                         Text="{Binding Password, Mode=OneWayToSource}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Classes="modal-button-group">
+                <Button Classes="button-default" Command="{Binding OnCancel}">Cancel</Button>
+                <Button Classes="button-highlight" Command="{Binding OnSubmit}">Submit</Button>
+            </StackPanel>
+        </StackPanel>
+    </c:ModalFrame>
+</UserControl>

@@ -17,6 +17,7 @@ public abstract class ModalViewModel : ViewModelBase
         Ignore,
         Continue,
         TryAgain,
+        Submit,
     }
 
     public class ClosedEventArgs : EventArgs

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading.Tasks;
 
 using AdLib.Config;
 using AdLib.Identities;
@@ -52,23 +53,37 @@ public partial class StartScreenViewModel : PageViewModel
     public ObservableCollection<IdentityLabel> ClientAvailableIdentities { get; } = [];
 
     [RelayCommand]
-    public void CreateNewServerIdentity()
+    public async Task CreateNewServerIdentity()
     {
-        string friendlyName = "Test name"; // TODO get user input
-        char[] password = [];
+        if (await this.OpenModalAsync(new IdentityCreationModalViewModel()) is not
+            IdentityCreationModalViewModel modal)
+        {
+            throw new InvalidOperationException("Invalid modal received");
+        }
+
+        string friendlyName = modal.Name;
+        char[] password = modal.Password.ToCharArray();
 
         Identity ident = this._serverStore.CreateNewIdentity(friendlyName, password);
         this.ServerAvailableIdentities.Add(new IdentityLabel(ident.InternalName, ident.FriendlyName));
     }
 
     [RelayCommand]
-    public void CreateNewClientIdentity()
+    public async Task CreateNewClientIdentity()
     {
-        string friendlyName = "Test name"; // TODO get user input
-        char[] password = [];
+        if (await this.OpenModalAsync(new IdentityCreationModalViewModel()) is not
+            IdentityCreationModalViewModel modal)
+        {
+            throw new InvalidOperationException("Invalid modal received");
+        }
+
+        string friendlyName = modal.Name;
+        char[] password = modal.Password.ToCharArray();
 
         Identity ident = this._clientStore.CreateNewIdentity(friendlyName, password);
-        this.ClientAvailableIdentities.Add(new IdentityLabel(ident.InternalName, ident.FriendlyName));
+        IdentityLabel label = new(ident.InternalName, ident.FriendlyName);
+        this.ClientAvailableIdentities.Add(label);
+        this.ClientSelectedIdentity = label;
     }
 
     [RelayCommand]

@@ -16,7 +16,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
-    
+
     <Application.Styles>
         <FluentTheme />
 
@@ -24,7 +24,11 @@
             <Setter Property="FontSize" Value="16" />
             <Setter Property="Foreground" Value="{x:Static root:App.TextBrush}" />
         </Style>
-        
+        <Style Selector="Label">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="Foreground" Value="{x:Static root:App.TextBrush}" />
+        </Style>
+
         <Style Selector="TextBlock.h1">
             <Setter Property="FontSize" Value="56.0" />
             <Setter Property="FontWeight" Value="ExtraBold" />
@@ -95,16 +99,23 @@
             <Setter Property="Height" Value="8" />
         </Style>
 
-        <Style Selector=":is(Panel).modal-buttons">
+        <Style Selector=":is(Panel).modal-button-group">
             <Setter Property="Margin" Value="8" />
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
+
+        <Style Selector="Button.button-highlight">
+            <Setter Property="Background" Value="{x:Static root:App.AccentBrush}" />
+            <Setter Property="Foreground" Value="{x:Static root:App.BackgroundBrush}" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="Button.button-default" />
 
         <Style Selector="ContentControl.content">
             <Setter Property="Padding" Value="8, 8, 8, 16" />
             <Setter Property="Margin" Value="20" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{x:Static root:App.SubtleLineBrush}" /> 
+            <Setter Property="BorderBrush" Value="{x:Static root:App.SubtleLineBrush}" />
         </Style>
         <Style Selector=":is(ContentControl).background">
             <Setter Property="Background" Value="{x:Static root:App.BackgroundBrush}" />
