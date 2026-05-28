@@ -63,6 +63,8 @@ public partial class StartScreenViewModel : PageViewModel
             throw new InvalidOperationException("Invalid modal received");
         }
 
+        if (transition.Action != ModalViewModel.CloseAction.Submit) return;
+
         string friendlyName = modal.Name;
         char[] password = modal.Password.ToCharArray();
 
@@ -79,6 +81,8 @@ public partial class StartScreenViewModel : PageViewModel
         {
             throw new InvalidOperationException("Invalid modal received");
         }
+
+        if (transition.Action != ModalViewModel.CloseAction.Submit) return;
 
         string friendlyName = modal.Name;
         char[] password = modal.Password.ToCharArray();
