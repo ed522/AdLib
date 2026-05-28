@@ -172,7 +172,7 @@ public partial class ServerViewModel : PageViewModel
     public override string Title => "Hosting Server";
 
     [RelayCommand]
-    private void PauseTransfer() { this.ChangePage(this, new ErrorViewModel("Not implemented")); }
+    private void PauseTransfer() { this.ChangePage(new ErrorViewModel("Not implemented")); }
 
     [RelayCommand]
     private void StopTransfer()
@@ -180,6 +180,6 @@ public partial class ServerViewModel : PageViewModel
         this._server.Stop();
         this._server.Dispose();
         this.Status = "Stopped";
-        this.ChangePage(this, new StartScreenViewModel());
+        this.ChangePage(new StartScreenViewModel());
     }
 }

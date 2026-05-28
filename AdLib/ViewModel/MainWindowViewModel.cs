@@ -27,8 +27,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void HandlePageChange(PageViewModel arg)
     {
-        arg.PageChanged += (_ /* sender */, next) => this.HandlePageChange(next);
-        arg.ModalOpened += (_ /* sender */, next) => { this.HandleModalChange(next); };
+        arg.PageChangeRequested += (_ /* sender */, args) => this.HandlePageChange(args.NewPage);
+        arg.ModalOpenRequested += (_ /* sender */, args) => this.HandleModalChange(args.Modal);
         this.Title = $"AdLib - {arg.Title}";
         this.CurrentPage = arg;
     }
@@ -36,7 +36,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private void HandleModalChange(ModalViewModel arg)
     {
         arg.Closed += (_ /* sender */, _ /* arg */) => this.HandleModalChange(new NoModalViewModel());
-        arg.Switched += (_ /* sender */, next) => this.HandleModalChange(next.NewPage);
+        arg.Switched += (_ /* sender */, args) => this.HandleModalChange(args.NewPage);
         this.CurrentModal = arg;
     }
 }

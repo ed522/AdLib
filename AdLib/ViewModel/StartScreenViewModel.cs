@@ -94,7 +94,7 @@ public partial class StartScreenViewModel : PageViewModel
 
     [RelayCommand]
     public void GoToClientScreen() =>
-        this.ChangePage(this, new ErrorViewModel("Not implemented"));
+        this.ChangePage(new ErrorViewModel("Not implemented"));
 
     [RelayCommand]
     public void GoToServerScreen()
@@ -109,14 +109,14 @@ public partial class StartScreenViewModel : PageViewModel
             password
         );
 
-        this.ChangePage(this, new ServerViewModel(identity, this.ServerSharedFolder, password));
+        this.ChangePage(new ServerViewModel(identity, this.ServerSharedFolder, password));
     }
 
     [RelayCommand]
     public void GoToAboutScreen() =>
-        this.ChangePage(this, new ErrorViewModel("Not implemented"));
+        this.ChangePage(new ErrorViewModel("Not implemented"));
 
     [RelayCommand]
     public void GoToSettingsScreen() =>
-        this.ChangePage(this, new ErrorViewModel("Not implemented"));
+        this.ChangePage(new ErrorViewModel("Not implemented"));
 }
