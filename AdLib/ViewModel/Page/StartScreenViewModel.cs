@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using System.Threading.Tasks;
 
 using AdLib.Config;
@@ -43,6 +44,9 @@ public partial class StartScreenViewModel : PageViewModel
     private readonly IdentityStore _clientStore = new(ConfigDirectories.ClientOwnedIdentitiesPath, true);
     private readonly IdentityStore _serverStore = new(ConfigDirectories.ServerOwnedIdentitiesPath, false);
 
+    private readonly Lock _clientStoreLock = new();
+    private readonly Lock _serverStoreLock = new();
+
     private void RefreshIdentities()
     {
         this.ClientAvailableIdentities.Clear();
@@ -74,11 +78,27 @@ public partial class StartScreenViewModel : PageViewModel
 
         if (transition.Action != ModalViewModel.CloseAction.Submit) return;
 
-        string friendlyName = modal.Name;
-        char[] password = modal.Password.ToCharArray();
+        TaskCompletionSource<bool> tcs = new();
+        this.IsWorking = true;
 
-        Identity ident = this._serverStore.CreateNewIdentity(friendlyName, password);
-        this.ServerAvailableIdentities.Add(new IdentityLabel(ident.InternalName, ident.FriendlyName));
+        ThreadPool.QueueUserWorkItem(info =>
+        {
+            string friendlyName = info.Name;
+            char[] password = info.Password.ToCharArray();
+
+            lock (this._serverStoreLock)
+            {
+                Identity ident = this._serverStore.CreateNewIdentity(friendlyName, password);
+                IdentityLabel label = new(ident.InternalName, ident.FriendlyName);
+                this.ServerAvailableIdentities.Add(label);
+                this.ServerSelectedIdentity = label;
+            }
+
+            tcs.SetResult(true);
+        }, modal, true);
+
+        await tcs.Task;
+        this.IsWorking = false;
     }
 
     [RelayCommand]
@@ -93,13 +113,27 @@ public partial class StartScreenViewModel : PageViewModel
 
         if (transition.Action != ModalViewModel.CloseAction.Submit) return;
 
-        string friendlyName = modal.Name;
-        char[] password = modal.Password.ToCharArray();
+        TaskCompletionSource<bool> tcs = new();
+        this.IsWorking = true;
 
-        Identity ident = this._clientStore.CreateNewIdentity(friendlyName, password);
-        IdentityLabel label = new(ident.InternalName, ident.FriendlyName);
-        this.ClientAvailableIdentities.Add(label);
-        this.ClientSelectedIdentity = label;
+        ThreadPool.QueueUserWorkItem(info =>
+        {
+            string friendlyName = info.Name;
+            char[] password = info.Password.ToCharArray();
+
+            lock (this._clientStoreLock)
+            {
+                Identity ident = this._clientStore.CreateNewIdentity(friendlyName, password);
+                IdentityLabel label = new(ident.InternalName, ident.FriendlyName);
+                this.ClientAvailableIdentities.Add(label);
+                this.ClientSelectedIdentity = label;
+            }
+
+            tcs.SetResult(true);
+        }, modal, true);
+
+        await tcs.Task;
+        this.IsWorking = false;
     }
 
     private static UserPasswordModalViewModel MakeIdentityCreationModal() =>
