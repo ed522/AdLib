@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
@@ -55,8 +56,9 @@ public partial class StartScreenViewModel : PageViewModel
     [RelayCommand]
     public async Task CreateNewServerIdentity()
     {
-        if (await this.OpenModalAsync(new IdentityCreationModalViewModel()) is not
-            IdentityCreationModalViewModel modal)
+        ModalTransitionInfo transition = await this.OpenModalAsync(new IdentityCreationModalViewModel());
+
+        if (transition.Modal is not IdentityCreationModalViewModel modal)
         {
             throw new InvalidOperationException("Invalid modal received");
         }
@@ -71,8 +73,9 @@ public partial class StartScreenViewModel : PageViewModel
     [RelayCommand]
     public async Task CreateNewClientIdentity()
     {
-        if (await this.OpenModalAsync(new IdentityCreationModalViewModel()) is not
-            IdentityCreationModalViewModel modal)
+        ModalTransitionInfo transition = await this.OpenModalAsync(new IdentityCreationModalViewModel());
+
+        if (transition.Modal is not IdentityCreationModalViewModel modal)
         {
             throw new InvalidOperationException("Invalid modal received");
         }
