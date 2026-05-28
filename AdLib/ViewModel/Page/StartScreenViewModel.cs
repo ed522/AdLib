@@ -21,6 +21,15 @@ public partial class StartScreenViewModel : PageViewModel
     [ObservableProperty] private IdentityLabel _clientSelectedIdentity;
     [ObservableProperty] private IdentityLabel _serverSelectedIdentity;
 
+    // overrides IsWorking
+    private bool _isWorking;
+
+    public override bool IsWorking
+    {
+        get => this._isWorking;
+        protected set => this.SetProperty(ref this._isWorking, value);
+    }
+
     public StartScreenViewModel() => this.RefreshIdentities();
 
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]

@@ -9,6 +9,7 @@ namespace AdLib.ViewModel.Core;
 public abstract class PageViewModel : ViewModelBase
 {
     public abstract string Title { get; }
+    public abstract bool IsWorking { get; protected set; }
 
     public struct ModalTransitionInfo
     {

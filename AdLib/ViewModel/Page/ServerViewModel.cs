@@ -171,6 +171,12 @@ public partial class ServerViewModel : PageViewModel
     public override Type ViewType => typeof(ServerScreen);
     public override string Title => "Hosting Server";
 
+    public override bool IsWorking
+    {
+        get => false;
+        protected set { }
+    }
+
     [RelayCommand]
     private void PauseTransfer() { this.ChangePage(new ErrorViewModel("Not implemented")); }
 

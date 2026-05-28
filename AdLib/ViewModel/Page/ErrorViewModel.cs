@@ -13,5 +13,12 @@ public class ErrorViewModel(string message) : PageViewModel
     
     public ErrorViewModel() : this("An unknown error occurred.") { }
     public override string Title => "Error!";
+
+    public override bool IsWorking
+    {
+        get => false;
+        protected set { }
+    }
+
     public string Message { get; set; } = message;
 }
