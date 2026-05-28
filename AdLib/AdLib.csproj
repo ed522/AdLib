@@ -23,6 +23,37 @@
         <AdditionalFiles Include="Themes\ExtendedChoiceBox.axaml"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <Compile Update="View\Modals\NoModal.axaml.cs">
+            <DependentUpon>NoModal.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="View\Modals\IdentityCreationModal.axaml.cs">
+            <DependentUpon>IdentityCreationModal.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="View\Modals\TestModal.axaml.cs">
+            <DependentUpon>TestModal.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="View\Pages\Error.axaml.cs">
+            <DependentUpon>Error.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="View\Pages\StartScreen.axaml.cs">
+            <DependentUpon>StartScreen.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="View\Pages\ServerScreen.axaml.cs">
+            <DependentUpon>ServerScreen.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="View\MainWindow.axaml.cs">
+            <DependentUpon>MainWindow.axaml</DependentUpon>
+            <SubType>Code</SubType>
+        </Compile>
+    </ItemGroup>
+
     <!-- always enable analyzers, but allow dynamic code gen during design -->
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">
         <PublishAot>true</PublishAot>
