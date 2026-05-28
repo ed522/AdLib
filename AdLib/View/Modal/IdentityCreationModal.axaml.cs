@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace AdLib.View;
+namespace AdLib.View.Modal;
 
 public partial class IdentityCreationModal : UserControl
 {

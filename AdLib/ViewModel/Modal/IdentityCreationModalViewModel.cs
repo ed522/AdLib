@@ -1,12 +1,13 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 
-using AdLib.View;
 using AdLib.ViewModel.Core;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace AdLib.ViewModel;
+using IdentityCreationModal = AdLib.View.Modal.IdentityCreationModal;
+
+namespace AdLib.ViewModel.Modal;
 
 public partial class IdentityCreationModalViewModel : ModalViewModel
 {

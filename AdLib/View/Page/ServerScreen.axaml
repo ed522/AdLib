@@ -3,12 +3,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:AdLib.ViewModel"
-             x:DataType="viewModel:ServerViewModel"
+             xmlns:page="clr-namespace:AdLib.ViewModel.Page"
+             x:DataType="page:ServerViewModel"
              mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
-             x:Class="AdLib.View.ServerScreen">
+             x:Class="AdLib.View.Page.ServerScreen">
 
     <Design.DataContext>
-        <viewModel:ServerViewModel />
+        <page:ServerViewModel />
     </Design.DataContext>
 
     <Grid ColumnDefinitions="192,288"

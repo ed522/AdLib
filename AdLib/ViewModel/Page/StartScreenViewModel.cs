@@ -1,20 +1,20 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 using AdLib.Config;
 using AdLib.Identities;
-using AdLib.View;
+using AdLib.View.Page;
 using AdLib.ViewModel.Core;
+using AdLib.ViewModel.Modal;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 using static AdLib.Identities.IdentityStore;
 
-namespace AdLib.ViewModel;
+namespace AdLib.ViewModel.Page;
 
 public partial class StartScreenViewModel : PageViewModel
 {

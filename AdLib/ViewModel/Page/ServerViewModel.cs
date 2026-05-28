@@ -9,7 +9,7 @@ using System.Threading;
 using AdLib.Config;
 using AdLib.Identities;
 using AdLib.Model;
-using AdLib.View;
+using AdLib.View.Page;
 using AdLib.ViewModel.Core;
 
 using Avalonia.Threading;
@@ -17,7 +17,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
-namespace AdLib.ViewModel;
+namespace AdLib.ViewModel.Page;
 
 public partial class ServerViewModel : PageViewModel
 {

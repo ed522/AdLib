@@ -4,11 +4,12 @@
              xmlns:blend="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:compat="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:AdLib.ViewModel"
-             x:DataType="viewModel:StartScreenViewModel" x:Class="AdLib.View.StartScreen"
+             xmlns:page="clr-namespace:AdLib.ViewModel.Page"
+             x:DataType="page:StartScreenViewModel" x:Class="AdLib.View.Page.StartScreen"
              compat:Ignorable="blend" blend:DesignWidth="1024" blend:DesignHeight="768">
 
     <Design.DataContext>
-        <viewModel:StartScreenViewModel />
+        <page:StartScreenViewModel />
     </Design.DataContext>
 
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Orientation="Vertical">

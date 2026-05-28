@@ -1,10 +1,11 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 
-using AdLib.View;
 using AdLib.ViewModel.Core;
 
-namespace AdLib.ViewModel;
+using NoModal = AdLib.View.Modal.NoModal;
+
+namespace AdLib.ViewModel.Modal;
 
 public class NoModalViewModel : ModalViewModel
 {

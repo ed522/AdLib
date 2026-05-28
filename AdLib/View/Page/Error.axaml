@@ -3,12 +3,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModel="clr-namespace:AdLib.ViewModel"
-             x:DataType="viewModel:ErrorViewModel"
+             xmlns:page="clr-namespace:AdLib.ViewModel.Page"
+             x:DataType="page:ErrorViewModel"
              mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="768"
-             x:Class="AdLib.View.Error">
+             x:Class="AdLib.View.Page.Error">
 
     <Design.DataContext>
-        <viewModel:ErrorViewModel />
+        <page:ErrorViewModel />
     </Design.DataContext>
 
     <StackPanel Orientation="Vertical" HorizontalAlignment="Center">

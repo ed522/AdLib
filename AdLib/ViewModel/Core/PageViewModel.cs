@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using AdLib.ViewModel.Modal;
+
 namespace AdLib.ViewModel.Core;
 
 public abstract class PageViewModel : ViewModelBase

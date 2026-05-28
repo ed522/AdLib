@@ -1,10 +1,10 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 
-using AdLib.View;
+using AdLib.View.Page;
 using AdLib.ViewModel.Core;
 
-namespace AdLib.ViewModel;
+namespace AdLib.ViewModel.Page;
 
 public class ErrorViewModel(string message) : PageViewModel
 {
