@@ -1,14 +1,13 @@
 using AdLib.View;
 using AdLib.ViewModel;
 
-using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 
 namespace AdLib;
 
-public class App : Application
+public partial class App
 {
     public static readonly IBrush BackgroundBrush = new SolidColorBrush(Color.Parse("#252530"));
     public static readonly IBrush DimmedBackgroundBrush = new SolidColorBrush(Color.Parse("#101010"), 0.7);
