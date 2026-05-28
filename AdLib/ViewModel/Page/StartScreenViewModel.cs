@@ -56,9 +56,9 @@ public partial class StartScreenViewModel : PageViewModel
     [RelayCommand]
     public async Task CreateNewServerIdentity()
     {
-        ModalTransitionInfo transition = await this.OpenModalAsync(new IdentityCreationModalViewModel());
+        ModalTransitionInfo transition = await this.OpenModalAsync(MakeIdentityCreationModal());
 
-        if (transition.Modal is not IdentityCreationModalViewModel modal)
+        if (transition.Modal is not UserPasswordModalViewModel modal)
         {
             throw new InvalidOperationException("Invalid modal received");
         }
@@ -75,9 +75,9 @@ public partial class StartScreenViewModel : PageViewModel
     [RelayCommand]
     public async Task CreateNewClientIdentity()
     {
-        ModalTransitionInfo transition = await this.OpenModalAsync(new IdentityCreationModalViewModel());
+        ModalTransitionInfo transition = await this.OpenModalAsync(MakeIdentityCreationModal());
 
-        if (transition.Modal is not IdentityCreationModalViewModel modal)
+        if (transition.Modal is not UserPasswordModalViewModel modal)
         {
             throw new InvalidOperationException("Invalid modal received");
         }
@@ -92,6 +92,12 @@ public partial class StartScreenViewModel : PageViewModel
         this.ClientAvailableIdentities.Add(label);
         this.ClientSelectedIdentity = label;
     }
+
+    private static UserPasswordModalViewModel MakeIdentityCreationModal() =>
+        new(
+            "Create a new identity",
+            "Enter your information for the new identity:"
+        );
 
     [RelayCommand]
     public void SelectClientIdentityCommand(IdentityLabel label) => this.ClientSelectedIdentity = label;
