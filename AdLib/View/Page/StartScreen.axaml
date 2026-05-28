@@ -84,7 +84,7 @@
 
                 <c:ExtendedChoiceBox.BottomItem>
                     <Button Content="+ Create new..."
-                            Command="{Binding CreateNewClientIdentity}"
+                            Command="{Binding CreateNewServerIdentity}"
                             HorizontalAlignment="Stretch" />
                 </c:ExtendedChoiceBox.BottomItem>
             </c:ExtendedChoiceBox>
