@@ -110,12 +110,15 @@ public partial class StartScreenViewModel : PageViewModel
         this.ChangePage(new ErrorViewModel("Not implemented"));
 
     [RelayCommand]
-    public void GoToServerScreen()
+    public async Task GoToServerScreen()
     {
-        // load identity
-        // TODO get user's password (modal?)
-        char[] password = [];
+        PasswordModalViewModel modal = new("Enter password", $"Enter the password for the identity " +
+                                                             $"{this.ServerSelectedIdentity.FriendlyName}:");
 
+        ModalTransitionInfo info = await this.OpenModalAsync(modal);
+        char[] password = ((PasswordModalViewModel)info.Modal).Password.ToCharArray();
+
+        // load identity
         Identity identity = Identity.LoadFromFile(
             ConfigDirectories.ServerOwnedIdentitiesPath,
             this.ServerSelectedIdentity.InternalName,
