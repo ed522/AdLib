@@ -111,6 +111,9 @@
             <Setter Property="Margin" Value="8" />
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
+        <Style Selector="StackPanel.modal-button-group">
+            <Setter Property="Orientation" Value="Horizontal" />
+        </Style>
 
         <Style Selector="Button.button-highlight">
             <Setter Property="Background" Value="{x:Static root:App.AccentBrush}" />
