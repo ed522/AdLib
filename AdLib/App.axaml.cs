@@ -2,6 +2,7 @@ using AdLib.View;
 using AdLib.ViewModel;
 
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -32,6 +33,8 @@ public class App : Application
             {
                 DataContext = new MainWindowViewModel(),
             };
+
+            desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
 
         base.OnFrameworkInitializationCompleted();
