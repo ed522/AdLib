@@ -47,13 +47,13 @@ public sealed class FileTransferClient : IDisposable
 
     public void AddRequest(ClientRequest request) { this._requests.Enqueue(request); }
 
-    public void ConnectAndListen(string host, Identity identity)
+    public void ConnectAndListen(string host, Identity identity, TrustStore store)
     {
         Thread thread = new(() =>
         {
             try
             {
-                this._tlsClient = new TlsClient(identity, new TrustStore()); // TODO load certificates
+                this._tlsClient = new TlsClient(identity, store);
                 TlsUtils.ConnectionInfo info = this._tlsClient.Connect(host);
                 TlsConnection? connection = info.Connection;
                 TlsUtils.ConnectionResult result = info.Result;
