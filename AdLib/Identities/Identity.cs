@@ -33,36 +33,39 @@ public class Identity
     private const string NistStandardCurveName = "P-256";
     private const string SignatureAlgorithm = "SHA256withECDSA";
 
-    private static string GetFileName(Guid internalName) =>
+    internal static string GetFileName(Guid internalName) =>
         internalName.ToString("D") + IdentityMetadata.FILE_EXTENSION;
 
     private Identity(
-        BcX509Certificate cert, AsymmetricKeyParameter bcKey, ECDsa dotnetKeys, string friendlyName, Guid internalName
+        BcX509Certificate cert, AsymmetricKeyParameter bcKey, ECDsa dotnetKeys, string friendlyName,
+        Guid internalName
     )
     {
         this.PrivateKey = bcKey;
         this.Ecdsa = dotnetKeys;
         this.Cert = cert;
-        this.ClrCert = X509CertificateLoader.LoadCertificate(cert.GetEncoded()).CopyWithPrivateKey(this.Ecdsa);
+
+        this.ClrCert = X509CertificateLoader.LoadCertificate(cert.GetEncoded())
+                                            .CopyWithPrivateKey(this.Ecdsa);
+
         this.FriendlyName = friendlyName;
         this.InternalName = internalName;
     }
 
     public Identity(IdentityMetadata metadata, char[] password)
     {
-        this.InternalName = metadata.InternalName;
-
         if (metadata == null)
         {
             throw new InvalidOperationException("Failed to deserialize identity");
         }
 
+        this.InternalName = metadata.InternalName;
         Lockbox box = Lockbox.DecryptLockbox(metadata.EncryptedPrivateKey, metadata.Certificate, password);
 
         this.PrivateKey = PrivateKeyFactory.CreateKey(box.Data);
 
         this.Ecdsa = ECDsa.Create();
-        this.Ecdsa.ImportECPrivateKey(box.Data, out _);
+        this.Ecdsa.ImportPkcs8PrivateKey(box.Data, out _);
 
         this.Cert = new X509CertificateParser().ReadCertificate(metadata.Certificate);
 
@@ -178,4 +181,16 @@ public class Identity
 
     private static ECDomainParameters GetDomainParameters(X9ECParameters domainParameters) =>
         new(domainParameters.Curve, domainParameters.G, domainParameters.N, domainParameters.H);
+
+    public override bool Equals(object? other) =>
+        other is Identity ident &&
+        this.InternalName == ident.InternalName &&
+        this.FriendlyName == ident.FriendlyName &&
+        this.Cert.Equals(ident.Cert) &&
+        this.ClrCert.Equals(ident.ClrCert) &&
+        this.PrivateKey.Equals(ident.PrivateKey);
+
+    // leaves out Ecdsa since that has no equality operator
+    public override int GetHashCode() =>
+        HashCode.Combine(this.InternalName, this.FriendlyName, this.Cert, this.ClrCert, this.PrivateKey);
 }

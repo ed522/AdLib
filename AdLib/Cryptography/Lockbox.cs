@@ -92,7 +92,7 @@ public class Lockbox
         this._iv.CopyTo(total, SECRET_LENGTH);
         encryptedData.CopyTo(total, SECRET_LENGTH + IV_LENGTH);
 
-        return encryptedData;
+        return total;
     }
 
     public byte[] EncryptNewLockbox(char[] password, byte[] aad)
@@ -120,7 +120,7 @@ public class Lockbox
         // increment IV
         Increment(this._iv);
 
-        // encrypt using already
+        // encrypt using already-setup data
         return this.EncryptDirectly(password, aad);
     }
 
@@ -128,9 +128,11 @@ public class Lockbox
     {
         byte[] salt = new byte[SECRET_LENGTH];
         byte[] iv = new byte[IV_LENGTH];
+        byte[] encryptedData = new byte[data.Length - SECRET_LENGTH - IV_LENGTH];
 
         Array.Copy(data, 0, salt, 0, SECRET_LENGTH);
         Array.Copy(data, SECRET_LENGTH, iv, 0, IV_LENGTH);
+        Array.Copy(data, SECRET_LENGTH + IV_LENGTH, encryptedData, 0, encryptedData.Length);
 
         // derive key
         Argon2Parameters argonParams = MakeArgonParameters(salt);
@@ -140,12 +142,12 @@ public class Lockbox
         _hash.GenerateBytes(password, secretKey);
 
         ChaCha20Poly1305 cryptEngine = new();
-        cryptEngine.Init(false, new AeadParameters(new KeyParameter(secretKey), IV_LENGTH * 8, iv));
-        byte[] plaintext = new byte[cryptEngine.GetOutputSize(data.Length)]; 
+        cryptEngine.Init(false, new AeadParameters(new KeyParameter(secretKey), TAG_LENGTH * 8, iv));
+        byte[] plaintext = new byte[cryptEngine.GetOutputSize(encryptedData.Length)]; 
 
         cryptEngine.ProcessAadBytes(aad);
-        int processed = cryptEngine.ProcessBytes(data, 0, data.Length, plaintext, 0);
-        cryptEngine.DoFinal(data, processed);
+        int processed = cryptEngine.ProcessBytes(encryptedData, 0, encryptedData.Length, plaintext, 0);
+        cryptEngine.DoFinal(encryptedData, processed);
 
         return new Lockbox(plaintext, salt, iv);
     }
