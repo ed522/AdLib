@@ -12,7 +12,12 @@ namespace AdLib.Model;
 
 public sealed class FileTransferClient : IDisposable
 {
-    public delegate void FileListingHandler(string path, FileEntry[] files);
+    public class FileListingReceivedEventArgs : EventArgs
+    {
+        public required string Path { get; init; }
+        public required FileEntry[] Files { get; init; }
+    }
+
     private const int CommsLoopDelayMs = 10;
     private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
@@ -36,7 +41,7 @@ public sealed class FileTransferClient : IDisposable
         this._activeDownloads.Clear();
     }
 
-    public event FileListingHandler? FileListingReceived;
+    public event EventHandler<FileListingReceivedEventArgs>? FileListingReceived;
     public event TlsUtils.AuthenticationErrorHandler? CertificateError;
     public event Action<string>? GracefullyDisconnected;
     public event Action<string>? ForceDisconnected;
@@ -276,7 +281,12 @@ public sealed class FileTransferClient : IDisposable
                 break;
 
             case ListFilesResponseMessage listFiles:
-                this.FileListingReceived?.Invoke(listFiles.Path, listFiles.Files);
+                this.FileListingReceived?.Invoke(this, new FileListingReceivedEventArgs
+                {
+                    Path = listFiles.Path,
+                    Files = listFiles.Files,
+                });
+
                 break;
 
             case DataMessage data:

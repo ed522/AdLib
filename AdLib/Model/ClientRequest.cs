@@ -2,8 +2,8 @@ namespace AdLib.Model;
 
 public struct ClientRequest
 {
-    public ClientRequestType Type;
-    public string Path;
+    public required ClientRequestType Type;
+    public required string Path;
 }
 
 public enum ClientRequestType
