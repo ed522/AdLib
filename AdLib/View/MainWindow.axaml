@@ -5,8 +5,8 @@
         xmlns:viewModel="clr-namespace:AdLib.ViewModel"
         xmlns:view="clr-namespace:AdLib.View"
         x:DataType="viewModel:MainWindowViewModel" x:Class="AdLib.View.MainWindow"
-        mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="720"
-        SizeToContent="WidthAndHeight" CanResize="True"
+        mc:Ignorable="d" d:DesignWidth="1366" d:DesignHeight="768"
+        SizeToContent="Manual" CanResize="True" Width="1366" Height="768"
         Title="{Binding Title}"
         Classes="background">
     <Design.DataContext>
