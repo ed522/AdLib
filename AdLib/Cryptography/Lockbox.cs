@@ -39,7 +39,7 @@ public class Lockbox
             .WithVersion(Argon2Parameters.Version13)
             .Build();
 
-    private static void Increment(byte[]? iv)
+    internal static void Increment(byte[]? iv)
     {
         if (iv is null)
         {
