@@ -117,6 +117,17 @@ public class Lockbox
 
     public byte[] ReencryptLockbox(char[] password, byte[] aad)
     {
+        if (this.Data is null)
+        {
+            throw new InvalidOperationException("Lockbox does not have any data");
+        }
+
+        if (this._salt is null || this._iv is null)
+        {
+            throw new InvalidOperationException("Lockbox has not been initialized - use EncryptNewLockbox " +
+                                                "instead");
+        }
+        
         // increment IV
         Increment(this._iv);
 
@@ -143,11 +154,11 @@ public class Lockbox
 
         ChaCha20Poly1305 cryptEngine = new();
         cryptEngine.Init(false, new AeadParameters(new KeyParameter(secretKey), TAG_LENGTH * 8, iv));
-        byte[] plaintext = new byte[cryptEngine.GetOutputSize(encryptedData.Length)]; 
+        byte[] plaintext = new byte[cryptEngine.GetOutputSize(encryptedData.Length)];
 
         cryptEngine.ProcessAadBytes(aad);
         int processed = cryptEngine.ProcessBytes(encryptedData, 0, encryptedData.Length, plaintext, 0);
-        cryptEngine.DoFinal(encryptedData, processed);
+        cryptEngine.DoFinal(plaintext, processed);
 
         return new Lockbox(plaintext, salt, iv);
     }
