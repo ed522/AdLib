@@ -149,8 +149,23 @@ public partial class StartScreenViewModel : PageViewModel
     public void SelectServerIdentityCommand(IdentityLabel label) => this.ServerSelectedIdentity = label;
 
     [RelayCommand]
-    public void GoToClientScreen() =>
-        this.ChangePage(new ErrorViewModel("Not implemented"));
+    public async Task GoToClientScreen()
+    {
+        PasswordModalViewModel modal = new("Enter password", $"Enter the password for the identity " +
+                                                             $"{this.ServerSelectedIdentity.FriendlyName}:");
+
+        ModalTransitionInfo info = await this.OpenModalAsync(modal);
+        char[] password = ((PasswordModalViewModel)info.Modal).Password.ToCharArray();
+
+        // load identity
+        Identity identity = Identity.LoadFromFile(
+            ConfigDirectories.ServerOwnedIdentitiesPath,
+            this.ServerSelectedIdentity.InternalName,
+            password
+        );
+
+        this.ChangePage(new ClientScreenViewModel(identity, password, this.ClientTargetIp));
+    }
 
     [RelayCommand]
     public async Task GoToServerScreen()
