@@ -93,7 +93,10 @@ public sealed partial class FileTransferServer
                 // no fields to check
 
                 // acknowledge
-                FileTransferUtils.SendMessage(this._connection.SslStream, new InitAckMessage());
+                FileTransferUtils.SendMessage(
+                    this._connection.SslStream,
+                    new InitAckMessage { SharedFolderPath = this._rootPath }
+                );
 
                 while (!this._cancellationToken.IsCancellationRequested && !this._isDisconnected)
                 {
@@ -206,6 +209,7 @@ public sealed partial class FileTransferServer
 
                     this.TransferFinished?.Invoke(this,
                         new TransferFinishedEventArgs { Path = finished.Path, IsSending = false });
+
                     break;
 
                 case EndMessage:

@@ -22,6 +22,7 @@ public sealed class FileTransferClient : IDisposable
     private string _latestDownload = "";
     private TlsClient? _tlsClient;
     public bool IsConnected { get; private set; }
+    public string? ServerFolder { get; private set; }
 
     public void Dispose()
     {
@@ -75,6 +76,7 @@ public sealed class FileTransferClient : IDisposable
                     this.CertificateError?.Invoke(host, info.Certificate, info.PresentedCert, result, reason);
                     return;
                 }
+
                 // quick sanity check
                 if (connection is null || this._tlsClient.SslStream is null)
                 {
@@ -247,7 +249,8 @@ public sealed class FileTransferClient : IDisposable
     {
         switch (message)
         {
-            case InitAckMessage:
+            case InitAckMessage init:
+                this.ServerFolder = init.SharedFolderPath;
                 break;
 
             case ErrorFatalMessage fatal:
