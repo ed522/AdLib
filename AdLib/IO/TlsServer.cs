@@ -20,7 +20,7 @@ public sealed class TlsServer : IDisposable
     public TlsServer(Identity identity, TrustStore? trustedCerts = null)
     {
         this._identity = identity;
-        this._listener = new TcpListener(IPAddress.Any, TlsUtils.PORT);
+        this._listener = new TcpListener(IPAddress.Any, TlsUtils.Port);
         this._trustStore = trustedCerts ?? new TrustStore();
     }
 

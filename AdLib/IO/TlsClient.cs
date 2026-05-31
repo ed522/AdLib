@@ -22,7 +22,7 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
     public ConnectionInfo Connect(string host)
     {
         TcpClient tcpClient = new();
-        tcpClient.Connect(host, PORT);
+        tcpClient.Connect(host, Port);
 
         ConnectionResult result = ConnectionResult.DidNotAttempt;
         X509Certificate2? presentedCert = null;

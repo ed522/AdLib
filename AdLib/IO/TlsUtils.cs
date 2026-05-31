@@ -34,7 +34,7 @@ public static class TlsUtils
         UnspecifiedError = 0xFF,
     }
 
-    public const ushort PORT = 7477;
+    public const ushort Port = 7477;
 
     private static readonly HashAlgorithmName CertHash = HashAlgorithmName.SHA3_256;
 
@@ -143,8 +143,8 @@ public static class TlsUtils
 
     /// <summary>
     ///     Communicates with the specified remote host to get rejection reasons over an unsecured channel.
-    ///     The local host will both tell the remote host why it rejected the connection, and return a reason
-    ///     provided by the remote host (both if applicable).
+    ///     The local host will both tell the remote host why it rejected the connection, and return a
+    ///     reason provided by the remote host (both if applicable).
     /// </summary>
     /// <param name="client">the client to communicate over</param>
     /// <param name="result">the result of authentication on this host</param>
