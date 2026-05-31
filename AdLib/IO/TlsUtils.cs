@@ -170,7 +170,7 @@ public static class TlsUtils
             return (RejectionReason)reasonCode;
         }
 
-        return RejectionReason.None;
+        return RejectionReason.UnspecifiedError;
     }
 
     public struct ConnectionInfo
