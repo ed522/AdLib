@@ -3,6 +3,8 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 using AdLib.Identities;
 
@@ -19,10 +21,10 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
 
     public void Dispose() { this._connection?.Dispose(); }
 
-    public ConnectionInfo Connect(string host)
+    public async Task<ConnectionInfo> ConnectAsync(string host, CancellationToken ct = default)
     {
         TcpClient tcpClient = new();
-        tcpClient.Connect(host, Port);
+        await tcpClient.ConnectAsync(host, Port, ct);
 
         ConnectionResult result = ConnectionResult.DidNotAttempt;
         X509Certificate2? presentedCert = null;
@@ -33,17 +35,26 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
 
         try
         {
-            sslStream.AuthenticateAsClient(host, [identity.ClrCert], SslProtocols.Tls13, true);
+            SslClientAuthenticationOptions options = new()
+            {
+                TargetHost = host,
+                ClientCertificates = [identity.Cert],
+                EnabledSslProtocols = SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+            };
+
+            await sslStream.AuthenticateAsClientAsync(options, ct);
             // cert + result are now set, unless validator never ran
             this._connection = new TlsConnection(tcpClient, sslStream);
         }
         catch (AuthenticationException)
         {
-            reason = CommunicateRejection(tcpClient, result);
+            reason = await CommunicateRejectionAsync(tcpClient, result, ct);
             tcpClient.Dispose();
 
             // clean up (since the streams are invalid now)
-            sslStream.Dispose();
+            await sslStream.DisposeAsync();
+            tcpClient.Dispose();
             this._connection = null;
         }
 
@@ -66,4 +77,5 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
             );
         }
     }
+
 }

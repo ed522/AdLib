@@ -60,7 +60,7 @@ public sealed class FileTransferClient : IDisposable
             try
             {
                 this._tlsClient = new TlsClient(identity, store);
-                TlsUtils.ConnectionInfo info = this._tlsClient.Connect(host);
+                TlsUtils.ConnectionInfo info = this._tlsClient.ConnectAsync(host).GetAwaiter().GetResult();
                 TlsConnection? connection = info.Connection;
                 TlsUtils.ConnectionResult result = info.Result;
                 TlsUtils.RejectionReason reason = info.Reason;

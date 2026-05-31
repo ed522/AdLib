@@ -4,6 +4,8 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 using AdLib.Identities;
 
@@ -38,29 +40,37 @@ public sealed class TlsServer : IDisposable
 
     public void Stop() => this._listener.Stop();
 
-    public TlsUtils.ConnectionInfo AcceptClient()
+    public async Task<TlsUtils.ConnectionInfo> AcceptClientAsync(CancellationToken ct = default)
     {
-        TcpClient tcpClient = this._listener.AcceptTcpClient();
+        TcpClient tcpClient = await this._listener.AcceptTcpClientAsync(ct);
         IPAddress? ip = (tcpClient.Client.RemoteEndPoint as IPEndPoint)?.Address;
 
         X509Certificate2? clientCert = null;
         Certificate? realCert = null;
         TlsUtils.ConnectionResult result = TlsUtils.ConnectionResult.Success;
         TlsUtils.RejectionReason reason = TlsUtils.RejectionReason.None;
-
+        
         SslStream sslStream = new(tcpClient.GetStream(), true, Validate);
         TlsConnection? connection;
 
         try
         {
-            sslStream.AuthenticateAsServer(this._identity.ClrCert, true, SslProtocols.Tls13, true);
+            SslServerAuthenticationOptions options = new()
+            {
+                ServerCertificate = this._identity.Cert,
+                ClientCertificateRequired = true,
+                EnabledSslProtocols = SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+            };
+
+            await sslStream.AuthenticateAsServerAsync(options, ct);
             connection = new TlsConnection(tcpClient, sslStream);
         }
         catch (AuthenticationException)
         {
-            reason = TlsUtils.CommunicateRejection(tcpClient, result);
+            reason = await TlsUtils.CommunicateRejectionAsync(tcpClient, result, ct);
             tcpClient.Dispose();
-            sslStream.Dispose();
+            await sslStream.DisposeAsync();
             connection = null;
         }
 

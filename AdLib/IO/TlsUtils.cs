@@ -3,6 +3,8 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
+using System.Threading.Tasks;
 
 using AdLib.Identities;
 
@@ -149,25 +151,33 @@ public static class TlsUtils
     /// <param name="client">the client to communicate over</param>
     /// <param name="result">the result of authentication on this host</param>
     /// <returns></returns>
-    public static RejectionReason CommunicateRejection(TcpClient client, ConnectionResult result)
+    public static async Task<RejectionReason> CommunicateRejectionAsync(
+        TcpClient client, ConnectionResult result, CancellationToken ct = default
+    )
     {
-        client.GetStream().WriteByte((byte)(result switch
-        {
-            ConnectionResult.BadCertificate => RejectionReason.BadCertificate,
-            ConnectionResult.MismatchedCertificate => RejectionReason.MismatchedCertificate,
-            ConnectionResult.UntrustedCertificate => RejectionReason.UntrustedCertificate,
-            ConnectionResult.UnspecifiedError => RejectionReason.UnspecifiedError,
-            ConnectionResult.Success => RejectionReason.None,
-            _ => RejectionReason.UnspecifiedError,
-        }));
+        await client.GetStream().WriteAsync(
+            new[]
+            {
+                (byte)(result switch
+                {
+                    ConnectionResult.BadCertificate => RejectionReason.BadCertificate,
+                    ConnectionResult.MismatchedCertificate => RejectionReason.MismatchedCertificate,
+                    ConnectionResult.UntrustedCertificate => RejectionReason.UntrustedCertificate,
+                    ConnectionResult.UnspecifiedError => RejectionReason.UnspecifiedError,
+                    ConnectionResult.Success => RejectionReason.None,
+                    _ => RejectionReason.UnspecifiedError,
+                }),
+            }, ct
+        );
 
         // see if there's a reason (defaults to None)
-        int reasonCode = client.GetStream().ReadByte();
+        byte[] reason = new byte[1];
+        int processed = await client.GetStream().ReadAsync(reason, ct);
 
         // make sure stream isn't closed yet
-        if (reasonCode != -1)
+        if (processed > 0)
         {
-            return (RejectionReason)reasonCode;
+            return (RejectionReason)reason[0];
         }
 
         return RejectionReason.UnspecifiedError;

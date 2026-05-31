@@ -87,7 +87,10 @@ public sealed partial class FileTransferServer : IDisposable
             {
                 try
                 {
-                    TlsUtils.ConnectionInfo connectionInfo = this._tlsServer.AcceptClient();
+                    // threaded so async is useless
+                    TlsUtils.ConnectionInfo connectionInfo =
+                        this._tlsServer.AcceptClientAsync().GetAwaiter().GetResult();
+
                     // client disposes connection in its Dispose, and that's called on thread exit
                     TlsConnection? connection = connectionInfo.Connection;
 
@@ -131,7 +134,7 @@ public sealed partial class FileTransferServer : IDisposable
                         this._cancellationTokenSource.Token);
 
                     // forward all events to our subscribers (but give them the client info)
-                    
+
                     // get rid of client on disconnect
                     handler.Disconnected += (sender, args) =>
                     {
