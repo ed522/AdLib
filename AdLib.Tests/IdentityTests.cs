@@ -5,6 +5,7 @@ using Org.BouncyCastle.Crypto;
 
 namespace AdLib.Tests;
 
+[TestFixture]
 public class IdentityTests
 {
     private const string IdentityName = "testing identity friendly name";

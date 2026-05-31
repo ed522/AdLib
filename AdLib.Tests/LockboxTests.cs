@@ -4,6 +4,7 @@ using Org.BouncyCastle.Crypto;
 
 namespace AdLib.Tests;
 
+[TestFixture]
 public class LockboxTests
 {
     private static char[] Password => "abcdabcd".ToCharArray();
