@@ -9,7 +9,7 @@ namespace AdLib.Identities;
 public record Certificate
 {
     public const string FILE_EXTENSION = ".adc";
-    public required string InternalName { get; init; }
+    public required Guid InternalName { get; init; }
     public required string FriendlyName { get; init; }
 
     // weird conversion logic since the source generator will always crawl public types, even if they have a custom 
