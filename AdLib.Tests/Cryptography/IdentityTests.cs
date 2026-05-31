@@ -3,7 +3,7 @@ using AdLib.Identities;
 using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 
-namespace AdLib.Tests;
+namespace AdLib.Tests.Cryptography;
 
 [TestFixture]
 public class IdentityTests

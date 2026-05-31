@@ -2,7 +2,7 @@ using AdLib.Cryptography;
 
 using Org.BouncyCastle.Crypto;
 
-namespace AdLib.Tests;
+namespace AdLib.Tests.Cryptography;
 
 [TestFixture]
 public class LockboxTests
