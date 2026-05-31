@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 
-using static AdLib.IO.TlsUtils;
+using static AdLib.IO.SecureConnectionUtils;
 
 namespace AdLib.Tests.Tls;
 

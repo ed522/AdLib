@@ -17,7 +17,7 @@ public sealed partial class FileTransferServer
         private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
         private readonly CancellationToken _cancellationToken;
 
-        private readonly TlsConnection _connection;
+        private readonly SecureConnection _connection;
 
         private readonly Random _random = new();
         private readonly string _rootPath;
@@ -26,7 +26,7 @@ public sealed partial class FileTransferServer
         private bool _hasRunDisconnect;
 
         internal ClientHandler(
-            ClientInfo info, TlsConnection connection, string rootPath,
+            ClientInfo info, SecureConnection connection, string rootPath,
             CancellationToken cancellationToken
         )
         {

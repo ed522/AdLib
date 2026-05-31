@@ -10,7 +10,7 @@ using AdLib.Identities;
 
 namespace AdLib.IO;
 
-public static class TlsUtils
+public static class SecureConnectionUtils
 {
     public delegate void AuthenticationErrorHandler(
         string host, Certificate? cert, X509Certificate? presentedCert,
@@ -189,7 +189,7 @@ public static class TlsUtils
         public RejectionReason Reason;
         public string Hostname;
         public X509Certificate2? PresentedCert;
-        public TlsConnection? Connection;
+        public SecureConnection? Connection;
         public Certificate? Certificate;
     }
 }

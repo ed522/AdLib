@@ -8,13 +8,13 @@ using System.Threading.Tasks;
 
 using AdLib.Identities;
 
-using static AdLib.IO.TlsUtils;
+using static AdLib.IO.SecureConnectionUtils;
 
 namespace AdLib.IO;
 
-public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDisposable
+public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : IDisposable
 {
-    private TlsConnection? _connection;
+    private SecureConnection? _connection;
 
     public SslStream? SslStream => this._connection?.SslStream;
     public bool HasData => this._connection?.HasData ?? false;
@@ -45,7 +45,7 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
 
             await sslStream.AuthenticateAsClientAsync(options, ct);
             // cert + result are now set, unless validator never ran
-            this._connection = new TlsConnection(tcpClient, sslStream);
+            this._connection = new SecureConnection(tcpClient, sslStream);
         }
         catch (AuthenticationException)
         {

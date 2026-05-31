@@ -9,11 +9,11 @@ namespace AdLib.IO;
 ///     Encapsulates a TLS connection, including the underlying TCP client and the SSL stream.
 ///     This class ensures that both are disposed of correctly when the connection is closed.
 /// </summary>
-public sealed class TlsConnection : IDisposable
+public sealed class SecureConnection : IDisposable
 {
     private bool _disposed;
 
-    public TlsConnection(TcpClient insecureTcpClient, SslStream sslStream)
+    public SecureConnection(TcpClient insecureTcpClient, SslStream sslStream)
     {
         this._insecureTcpClient = insecureTcpClient;
         this.SslStream = sslStream;

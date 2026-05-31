@@ -25,7 +25,7 @@ public sealed class FileTransferClient : IDisposable
     private readonly ConcurrentQueue<ClientRequest> _requests = new();
 
     private string _latestDownload = "";
-    private TlsClient? _tlsClient;
+    private SecureClient? _tlsClient;
     public bool IsConnected { get; private set; }
     public string? ServerFolder { get; private set; }
 
@@ -42,7 +42,7 @@ public sealed class FileTransferClient : IDisposable
     }
 
     public event EventHandler<FileListingReceivedEventArgs>? FileListingReceived;
-    public event TlsUtils.AuthenticationErrorHandler? CertificateError;
+    public event SecureConnectionUtils.AuthenticationErrorHandler? CertificateError;
     public event Action<string>? GracefullyDisconnected;
     public event Action<string>? ForceDisconnected;
     public event Action<string>? RecoverableError;
@@ -59,14 +59,15 @@ public sealed class FileTransferClient : IDisposable
         {
             try
             {
-                this._tlsClient = new TlsClient(identity, store);
-                TlsUtils.ConnectionInfo info = this._tlsClient.ConnectAsync(host).GetAwaiter().GetResult();
-                TlsConnection? connection = info.Connection;
-                TlsUtils.ConnectionResult result = info.Result;
-                TlsUtils.RejectionReason reason = info.Reason;
+                this._tlsClient = new SecureClient(identity, store);
+                SecureConnectionUtils.ConnectionInfo info = this._tlsClient.ConnectAsync(host).GetAwaiter().GetResult();
+                SecureConnection? connection = info.Connection;
+                SecureConnectionUtils.ConnectionResult result = info.Result;
+                SecureConnectionUtils.RejectionReason reason = info.Reason;
 
                 // connection failed - raise the event then bail (stream is expected to be null) - does not return
-                if (result != TlsUtils.ConnectionResult.Success || reason != TlsUtils.RejectionReason.None)
+                if (result != SecureConnectionUtils.ConnectionResult.Success ||
+                    reason != SecureConnectionUtils.RejectionReason.None)
                 {
                     // note: PresentedCert is the one the server offered, Certificate is the one that we have
                     // (if any)
@@ -146,9 +147,9 @@ public sealed class FileTransferClient : IDisposable
         thread.Start();
     }
 
-    private void CommunicateLoop(TlsClient tlsClient)
+    private void CommunicateLoop(SecureClient secureClient)
     {
-        if (tlsClient.SslStream == null) return;
+        if (secureClient.SslStream == null) return;
 
         try
         {
@@ -159,9 +160,9 @@ public sealed class FileTransferClient : IDisposable
             }
 
             // server messages
-            while (tlsClient.HasData)
+            while (secureClient.HasData)
             {
-                IMessage message = FileTransferUtils.ReadMessage(tlsClient.SslStream);
+                IMessage message = FileTransferUtils.ReadMessage(secureClient.SslStream);
                 this.HandleServerMessage(message);
             }
         }

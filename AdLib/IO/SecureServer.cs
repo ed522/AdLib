@@ -11,7 +11,7 @@ using AdLib.Identities;
 
 namespace AdLib.IO;
 
-public sealed class TlsServer : IDisposable
+public sealed class SecureServer : IDisposable
 {
     private readonly Identity _identity;
     private readonly TcpListener _listener;
@@ -19,14 +19,14 @@ public sealed class TlsServer : IDisposable
     private readonly TrustStore _trustStore;
     private bool _disposed;
 
-    public TlsServer(Identity identity, TrustStore? trustedCerts = null)
+    public SecureServer(Identity identity, TrustStore? trustedCerts = null)
     {
         this._identity = identity;
-        this._listener = new TcpListener(IPAddress.Any, TlsUtils.Port);
+        this._listener = new TcpListener(IPAddress.Any, SecureConnectionUtils.Port);
         this._trustStore = trustedCerts ?? new TrustStore();
     }
 
-    public TlsServer(Identity identity, Certificate[]? trustedCerts = null) :
+    public SecureServer(Identity identity, Certificate[]? trustedCerts = null) :
         this(identity, new TrustStore(trustedCerts)) { }
 
     public void Dispose()
@@ -40,18 +40,18 @@ public sealed class TlsServer : IDisposable
 
     public void Stop() => this._listener.Stop();
 
-    public async Task<TlsUtils.ConnectionInfo> AcceptClientAsync(CancellationToken ct = default)
+    public async Task<SecureConnectionUtils.ConnectionInfo> AcceptClientAsync(CancellationToken ct = default)
     {
         TcpClient tcpClient = await this._listener.AcceptTcpClientAsync(ct);
         IPAddress? ip = (tcpClient.Client.RemoteEndPoint as IPEndPoint)?.Address;
 
         X509Certificate2? clientCert = null;
         Certificate? realCert = null;
-        TlsUtils.ConnectionResult result = TlsUtils.ConnectionResult.Success;
-        TlsUtils.RejectionReason reason = TlsUtils.RejectionReason.None;
+        SecureConnectionUtils.ConnectionResult result = SecureConnectionUtils.ConnectionResult.Success;
+        SecureConnectionUtils.RejectionReason reason = SecureConnectionUtils.RejectionReason.None;
         
         SslStream sslStream = new(tcpClient.GetStream(), true, Validate);
-        TlsConnection? connection;
+        SecureConnection? connection;
 
         try
         {
@@ -64,17 +64,17 @@ public sealed class TlsServer : IDisposable
             };
 
             await sslStream.AuthenticateAsServerAsync(options, ct);
-            connection = new TlsConnection(tcpClient, sslStream);
+            connection = new SecureConnection(tcpClient, sslStream);
         }
         catch (AuthenticationException)
         {
-            reason = await TlsUtils.CommunicateRejectionAsync(tcpClient, result, ct);
+            reason = await SecureConnectionUtils.CommunicateRejectionAsync(tcpClient, result, ct);
             tcpClient.Dispose();
             await sslStream.DisposeAsync();
             connection = null;
         }
 
-        return new TlsUtils.ConnectionInfo
+        return new SecureConnectionUtils.ConnectionInfo
         {
             Result = result,
             Reason = reason,
@@ -86,7 +86,7 @@ public sealed class TlsServer : IDisposable
 
         bool Validate(object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)
         {
-            return TlsUtils.ValidateCertificate(
+            return SecureConnectionUtils.ValidateCertificate(
                 ip?.ToString() ?? "", cert, chain, errors, this._trustStore, false,
                 out result, out realCert, out clientCert
             );

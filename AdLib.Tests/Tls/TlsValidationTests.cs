@@ -14,7 +14,7 @@ public class TlsValidationTests : TlsTestsBase
     [Test]
     public void TestValidationLogicOnTrustedCertificate_OutputsRemoteCertificate()
     {
-        TlsUtils.ValidateCertificate(
+        SecureConnectionUtils.ValidateCertificate(
             Host, this.ServerIdentity.Cert, this.ServerChain, SslPolicyErrors.None,
             this.ClientTrustStore, true,
             out _, out _, out X509Certificate2? presentedCert
@@ -31,7 +31,7 @@ public class TlsValidationTests : TlsTestsBase
     [Test]
     public void TestClientValidationLogicOnUntrustedCertificate_OutputsRemoteCertificate()
     {
-        TlsUtils.ValidateCertificate(
+        SecureConnectionUtils.ValidateCertificate(
             Host, this.UntrustedServerIdentity.Cert, this.UntrustedServerChain, SslPolicyErrors.None,
             this.ClientTrustStore, true,
             out _, out _, out X509Certificate2? presentedCert
@@ -48,7 +48,7 @@ public class TlsValidationTests : TlsTestsBase
     [Test]
     public void TestServerValidationLogicOnTrustedCertificate_OutputsRemoteCertificate()
     {
-        TlsUtils.ValidateCertificate(
+        SecureConnectionUtils.ValidateCertificate(
             Host, this.ClientIdentity.Cert, this.ClientChain, SslPolicyErrors.None,
             this.ServerTrustStore, false,
             out _, out _, out X509Certificate2? presentedCert
@@ -65,7 +65,7 @@ public class TlsValidationTests : TlsTestsBase
     [Test]
     public void TestServerValidationLogicOnUntrustedCertificate_OutputsRemoteCertificate()
     {
-        TlsUtils.ValidateCertificate(
+        SecureConnectionUtils.ValidateCertificate(
             Host, this.UntrustedClientIdentity.Cert, this.UntrustedClientChain, SslPolicyErrors.None,
             this.ServerTrustStore, false,
             out _, out _, out X509Certificate2? presentedCert
@@ -93,64 +93,64 @@ public class TlsValidationTests : TlsTestsBase
     [Test]
     public void TestResultOnClientTrustedCertificate_ReturnsTrue_Success()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             Host, this.ServerIdentity.Cert, this.ServerChain, SslPolicyErrors.None,
             this.ClientTrustStore, true,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.True);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.Success));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.Success));
         }
     }
 
     [Test]
     public void TestResultOnClientTrustedCertificateMismatchedName_ReturnsTrue_Success()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             Host, this.ServerIdentity.Cert, this.ServerChain,
             SslPolicyErrors.RemoteCertificateNameMismatch, this.ClientTrustStore, true,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.True);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.Success));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.Success));
         }
     }
 
     [Test]
     public void TestResultOnClientIncorrectCertificate_ReturnsFalse_MismatchedCertificate()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             Host, this.UntrustedServerIdentity.Cert, this.UntrustedServerChain, SslPolicyErrors.None,
             this.ClientTrustStore, true,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.False);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.MismatchedCertificate));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.MismatchedCertificate));
         }
     }
 
     [Test]
     public void TestResultOnClientUnknownHost_ReturnsFalse_UntrustedCertificate()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             UnknownHost, this.ServerIdentity.Cert, this.ServerChain, SslPolicyErrors.None,
             this.ClientTrustStore, true,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.False);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.UntrustedCertificate));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.UntrustedCertificate));
         }
     }
 
@@ -161,16 +161,16 @@ public class TlsValidationTests : TlsTestsBase
         X509Chain chain = new();
         chain.Build(cert);
 
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             UnknownHost, cert, chain, SslPolicyErrors.None,
             this.ClientTrustStore, true,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.False);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.BadCertificate));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.BadCertificate));
         }
     }
 
@@ -178,48 +178,48 @@ public class TlsValidationTests : TlsTestsBase
     [Test]
     public void TestResultOnServerTrustedCertificate_ReturnsTrue_Success()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             Host, this.ClientIdentity.Cert, this.ClientChain, SslPolicyErrors.None,
             this.ServerTrustStore, false,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.True);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.Success));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.Success));
         }
     }
 
     [Test]
     public void TestResultOnServerTrustedCertificateMismatchedName_ReturnsTrue_Success()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             Host, this.ClientIdentity.Cert, this.ClientChain,
             SslPolicyErrors.RemoteCertificateNameMismatch, this.ServerTrustStore, false,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.True);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.Success));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.Success));
         }
     }
 
     [Test]
     public void TestResultOnServerUnknownCertificate_ReturnsFalse_UntrustedCertificate()
     {
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             Host, this.UntrustedClientIdentity.Cert, this.UntrustedClientChain, SslPolicyErrors.None,
             this.ServerTrustStore, false,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.False);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.UntrustedCertificate));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.UntrustedCertificate));
         }
     }
 
@@ -230,16 +230,16 @@ public class TlsValidationTests : TlsTestsBase
         X509Chain chain = new();
         chain.Build(cert);
 
-        bool ret = TlsUtils.ValidateCertificate(
+        bool ret = SecureConnectionUtils.ValidateCertificate(
             UnknownHost, cert, chain, SslPolicyErrors.None,
             this.ServerTrustStore, false,
-            out TlsUtils.ConnectionResult status, out _, out _
+            out SecureConnectionUtils.ConnectionResult status, out _, out _
         );
 
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ret, Is.False);
-            Assert.That(status, Is.EqualTo(TlsUtils.ConnectionResult.BadCertificate));
+            Assert.That(status, Is.EqualTo(SecureConnectionUtils.ConnectionResult.BadCertificate));
         }
     }
 
