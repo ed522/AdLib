@@ -23,8 +23,8 @@ public sealed class TlsServer : IDisposable
         this._listener = new TcpListener(IPAddress.Any, TlsUtils.PORT);
         this._trustStore = trustedCerts ?? new TrustStore();
     }
-    
-    public TlsServer(Identity identity, Certificate[]? trustedCerts = null) : 
+
+    public TlsServer(Identity identity, Certificate[]? trustedCerts = null) :
         this(identity, new TrustStore(trustedCerts)) { }
 
     public void Dispose()
@@ -76,8 +76,10 @@ public sealed class TlsServer : IDisposable
 
         bool Validate(object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)
         {
-            return TlsUtils.ValidateCertificate(sender, cert, chain, errors, this._trustStore, false,
-                out result, out realCert, out clientCert);
+            return TlsUtils.ValidateCertificate(
+                ip?.ToString() ?? "", cert, chain, errors, this._trustStore, false,
+                out result, out realCert, out clientCert
+            );
         }
     }
 }

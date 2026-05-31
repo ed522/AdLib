@@ -60,8 +60,10 @@ public sealed class TlsClient(Identity identity, TrustStore trustedCerts) : IDis
         // for the `result` capture
         bool Validate(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors errors)
         {
-            return ValidateCertificate(sender, certificate, chain, errors, trustedCerts, false,
-                out result, out realCert, out presentedCert);
+            return ValidateCertificate(
+                host, certificate, chain, errors, trustedCerts, false,
+                out result, out realCert, out presentedCert
+            );
         }
     }
 }

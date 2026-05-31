@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -36,21 +35,25 @@ public static class TlsUtils
     }
 
     public const ushort PORT = 7477;
-    public const short RECOVERY_PORT = 7478;
 
     private static readonly HashAlgorithmName CertHash = HashAlgorithmName.SHA3_256;
 
     public static bool ValidateCertificate(
-        object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors,
+        string hostName, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors,
         TrustStore trustedCerts, bool validateHostnames,
         out ConnectionResult result, out Certificate? certInfo, out X509Certificate2? presentedCert
     )
     {
         // NOTE: do not use `certificate` directly since it lacks x509certificate2 props/methods
-        // get a hold of the cert in user code 
-        presentedCert = certificate is null ? null : new X509Certificate2(certificate);
+        // get a hold of the cert in user code
+        presentedCert = certificate switch
+        {
+            null => null,
+            X509Certificate2 cert2 => cert2,
+            _ => new X509Certificate2(certificate),
+        };
 
-        // not validated yet, so we can't return anything'
+        // not validated yet, so we can't return anything
         certInfo = null;
 
         if (presentedCert is null) // means server didn't even try to authenticate
@@ -81,68 +84,60 @@ public static class TlsUtils
             sslPolicyErrors |= SslPolicyErrors.RemoteCertificateChainErrors;
         }
 
-        if (sender is string hostName)
+        // some error
+        if (sslPolicyErrors != SslPolicyErrors.None)
         {
-            // some error
-            if (sslPolicyErrors != SslPolicyErrors.None)
-            {
-                // bad certificate
-                result = ConnectionResult.BadCertificate;
-                return false;
-            }
+            // bad certificate
+            result = ConnectionResult.BadCertificate;
+            return false;
+        }
 
-            Certificate? cert;
+        Certificate? cert;
 
-            if (validateHostnames)
+        if (validateHostnames)
+        {
+            if (trustedCerts.TryGetCertificate(hostName, out HostCertificate? foundCert))
             {
-                if (trustedCerts.TryGetCertificate(hostName, out HostCertificate? foundCert))
-                {
-                    cert = foundCert.Certificate;
-                }
-                else
-                {
-                    // untrusted, but not spoofed - can ask user for confirmation
-                    result = ConnectionResult.UntrustedCertificate;
-                    return false;
-                }
+                cert = foundCert.Certificate;
             }
             else
             {
-                // validate by thumbprint
-                byte[] presentedCertHash = presentedCert.GetCertHash(CertHash);
-
-                Certificate? possibleCert = 
-                    trustedCerts.GetCertificateByThumbprintOrDefault(presentedCertHash, CertHash);
-
-                if (possibleCert is null) // no match
-                {
-                    // ^^
-                    result = ConnectionResult.UntrustedCertificate;
-                    return false;
-                }
-
-                cert = possibleCert;
+                // untrusted, but not spoofed - can ask user for confirmation
+                result = ConnectionResult.UntrustedCertificate;
+                return false;
             }
-
-            X509Certificate2 realCert = cert.X509Cert;
-            bool status = realCert.GetCertHash(CertHash).SequenceEqual(presentedCert.GetCertHash(CertHash));
-
-            if (status)
-            {
-                // certs match, authentication successful
-                result = ConnectionResult.Success;
-                return true;
-            }
-
-            // we've seen this host before, but the cert is different. someone might be trying to
-            // spoof us - do not trust, do not ask for confirmation
-            result = ConnectionResult.MismatchedCertificate;
-            return false;
         }
-        // should be unreachable
+        else
+        {
+            // validate by thumbprint
+            byte[] presentedCertHash = presentedCert.GetCertHash(CertHash);
 
-        // idk
-        result = ConnectionResult.UnspecifiedError;
+            Certificate? possibleCert =
+                trustedCerts.GetCertificateByThumbprintOrDefault(presentedCertHash, CertHash);
+
+            if (possibleCert is null) // no match
+            {
+                // ^^
+                result = ConnectionResult.UntrustedCertificate;
+                return false;
+            }
+
+            cert = possibleCert;
+        }
+
+        X509Certificate2 realCert = cert.X509Cert;
+        bool status = realCert.GetCertHash(CertHash).SequenceEqual(presentedCert.GetCertHash(CertHash));
+
+        if (status)
+        {
+            // certs match, authentication successful
+            result = ConnectionResult.Success;
+            return true;
+        }
+
+        // we've seen this host before, but the cert is different. someone might be trying to
+        // spoof us - do not trust, do not ask for confirmation
+        result = ConnectionResult.MismatchedCertificate;
         return false;
     }
 
