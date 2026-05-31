@@ -10,14 +10,12 @@ public class IdentityStore
 {
     public readonly record struct IdentityLabel(Guid InternalName, string FriendlyName);
 
-    private readonly bool _isClient;
     private readonly Dictionary<Guid, IdentityMetadata> _availableIdentities = [];
     private readonly Dictionary<Guid, IdentityLabel> _availableIdentityLabels = [];
     private readonly List<Identity> _unlockedIdentities = [];
 
-    public IdentityStore(string folderPath, bool isClient)
+    public IdentityStore(string folderPath)
     {
-        this._isClient = isClient;
         const string fileExtension = IdentityMetadata.FILE_EXTENSION;
         this.FolderPath = folderPath;
 
@@ -40,7 +38,7 @@ public class IdentityStore
             this._availableIdentityLabels.Add(meta.InternalName,
                 new IdentityLabel(meta.InternalName, meta.FriendlyName));
 
-            this._availableIdentities.Add(Identity.GetCertificateGuid(meta.Certificate), meta);
+            this._availableIdentities.Add(Identity.GetCertificateGuid(meta.CertificatePfx), meta);
         }
     }
 
@@ -70,8 +68,7 @@ public class IdentityStore
     public Identity CreateNewIdentity(string friendlyName, char[] password)
     {
         // creates + stores
-        Identity identity = Identity.CreateNew(this.FolderPath, friendlyName, password,
-            this._isClient, out IdentityMetadata meta);
+        Identity identity = Identity.CreateNew(this.FolderPath, friendlyName, password, out IdentityMetadata meta);
 
         this._availableIdentityLabels.Add(identity.InternalName,
             new IdentityLabel(identity.InternalName, friendlyName));

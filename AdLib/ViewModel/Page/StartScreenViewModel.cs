@@ -41,8 +41,8 @@ public partial class StartScreenViewModel : PageViewModel
     public string ClientTargetIp { get; set; } = "";
     public string ServerSharedFolder { get; set; } = "";
 
-    private readonly IdentityStore _clientStore = new(ConfigDirectories.ClientOwnedIdentitiesPath, true);
-    private readonly IdentityStore _serverStore = new(ConfigDirectories.ServerOwnedIdentitiesPath, false);
+    private readonly IdentityStore _clientStore = new(ConfigDirectories.ClientOwnedIdentitiesPath);
+    private readonly IdentityStore _serverStore = new(ConfigDirectories.ServerOwnedIdentitiesPath);
 
     private readonly Lock _clientStoreLock = new();
     private readonly Lock _serverStoreLock = new();

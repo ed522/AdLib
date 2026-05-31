@@ -1,6 +1,5 @@
 using AdLib.Identities;
 
-using Org.BouncyCastle.Asn1.X509;
 using Org.BouncyCastle.Crypto;
 
 namespace AdLib.Tests.Cryptography;
@@ -25,51 +24,61 @@ public class IdentityTests
     [Test]
     public void ValidClientIdentityCreation_Succeeds()
     {
-        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password, true);
+        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password);
         Assert.That(identity, Is.Not.Null);
     }
 
     [Test]
     public void ClientIdentityAttributesTest()
     {
-        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password, true);
+        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password);
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(identity.PrivateKey, Is.Not.Null);
             Assert.That(identity.Cert, Is.Not.Null);
-            Assert.That(identity.ClrCert, Is.Not.Null);
             Assert.That(identity.FriendlyName, Is.Not.Null);
             Assert.That(identity.InternalName, Is.Not.Default);
-            Assert.That(identity.Ecdsa, Is.Not.Null);
+            Assert.That(identity.Keys, Is.Not.Null);
 
             Assert.That(identity.FriendlyName, Is.EqualTo(IdentityName));
-            Assert.That(identity.Cert.SubjectDN.GetValueList(X509Name.CN)[0], Is.EqualTo(IdentityName));
-            Assert.That(identity.ClrCert.HasPrivateKey);
-            Assert.That(identity.Cert.GetExtendedKeyUsage().Contains(KeyPurposeID.id_kp_clientAuth));
-            Assert.That(!identity.Cert.GetExtendedKeyUsage().Contains(KeyPurposeID.id_kp_serverAuth));
+
+            Assert.That(
+                identity.Cert.SubjectName.Name
+                        .Split(",")
+                        .Where(s => s.StartsWith("CN="))
+                        .Select(s => s.Replace("CN=", ""))
+                        .First(),
+                Is.EqualTo(IdentityName)
+            );
+
+            Assert.That(identity.Cert.HasPrivateKey);
         }
     }
 
     [Test]
     public void ServerIdentityAttributesTest()
     {
-        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password, false);
+        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password);
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(identity.PrivateKey, Is.Not.Null);
             Assert.That(identity.Cert, Is.Not.Null);
-            Assert.That(identity.ClrCert, Is.Not.Null);
             Assert.That(identity.FriendlyName, Is.Not.Null);
             Assert.That(identity.InternalName, Is.Not.Default);
-            Assert.That(identity.Ecdsa, Is.Not.Null);
+            Assert.That(identity.Keys, Is.Not.Null);
 
             Assert.That(identity.FriendlyName, Is.EqualTo(IdentityName));
-            Assert.That(identity.Cert.SubjectDN.GetValueList(X509Name.CN)[0], Is.EqualTo(IdentityName));
-            Assert.That(identity.ClrCert.HasPrivateKey);
-            Assert.That(identity.Cert.GetExtendedKeyUsage().Contains(KeyPurposeID.id_kp_serverAuth));
-            Assert.That(!identity.Cert.GetExtendedKeyUsage().Contains(KeyPurposeID.id_kp_clientAuth));
+
+            Assert.That(
+                identity.Cert.SubjectName.Name
+                        .Split(",")
+                        .Where(s => s.StartsWith("CN="))
+                        .Select(s => s.Replace("CN=", ""))
+                        .First(),
+                Is.EqualTo(IdentityName)
+            );
+
+            Assert.That(identity.Cert.HasPrivateKey);
         }
     }
 
@@ -77,14 +86,14 @@ public class IdentityTests
     public void IdentityCreationWithEquals_Fails()
     {
         Assert.Throws<ArgumentException>(() =>
-            Identity.CreateNew(this._storeFolder, InvalidIdentityName, Password, true)
+            Identity.CreateNew(this._storeFolder, InvalidIdentityName, Password)
         );
     }
 
     [Test]
     public void TestLoadStoreEquality_Equals()
     {
-        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password, true);
+        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password);
         Identity loadedIdentity = Identity.LoadFromFile(this._storeFolder, identity.InternalName, Password);
 
         using (Assert.EnterMultipleScope())
@@ -99,8 +108,7 @@ public class IdentityTests
     [Test]
     public void TestDataTampering_Throws()
     {
-        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password, true,
-            out IdentityMetadata meta);
+        Identity identity = Identity.CreateNew(this._storeFolder, IdentityName, Password, out IdentityMetadata meta);
 
         // addition is a permutation so it will guaranteed be different
         Assume.That(

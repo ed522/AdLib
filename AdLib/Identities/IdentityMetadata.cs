@@ -9,7 +9,7 @@ public class IdentityMetadata
     public const string FILE_EXTENSION = ".adi";
 
     public required Guid InternalName { get; init; }
-    public required byte[] Certificate { get; init; }
+    public required byte[] CertificatePfx { get; init; }
     public required byte[] EncryptedPrivateKey { get; init; }
     public required string FriendlyName { get; init; }
 
