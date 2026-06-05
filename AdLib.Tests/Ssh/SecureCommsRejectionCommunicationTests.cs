@@ -3,10 +3,10 @@ using System.Net.Sockets;
 
 using static AdLib.IO.SecureConnectionUtils;
 
-namespace AdLib.Tests.Tls;
+namespace AdLib.Tests.Ssh;
 
 [TestFixture]
-public class TlsRejectionCommunicationTests
+public class SecureCommsRejectionCommunicationTests
 {
     [SetUp]
     public void Setup()
