@@ -8,5 +8,5 @@ namespace AdLib.Model;
 public sealed class ClientInfo
 {
     public required string RemoteEndPoint { get; init; }
-    public required Certificate Certificate { get; init; }
+    public required PublicKeyInfo PublicKeyInfo { get; init; }
 }

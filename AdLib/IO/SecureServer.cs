@@ -1,18 +1,22 @@
 using System;
+using System.Diagnostics;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
 
+using Microsoft.DevTunnels.Ssh;
+using Microsoft.DevTunnels.Ssh.Algorithms;
+
 namespace AdLib.IO;
 
 public sealed class SecureServer : IDisposable
 {
+    private const int RecoveryTimeoutSeconds = 10;
+    
     private readonly Identity _identity;
     private readonly TcpListener _listener;
 
@@ -26,13 +30,17 @@ public sealed class SecureServer : IDisposable
         this._trustStore = trustedCerts ?? new TrustStore();
     }
 
-    public SecureServer(Identity identity, Certificate[]? trustedCerts = null) :
-        this(identity, new TrustStore(trustedCerts)) { }
+    public SecureServer(Identity identity, PublicKeyInfo[]? trustedCerts = null) :
+        this(identity, new TrustStore(trustedCerts))
+    {
+        // empty
+    }
 
     public void Dispose()
     {
         if (this._disposed) return;
         this._listener.Stop();
+        this._listener.Dispose();
         this._disposed = true;
     }
 
@@ -45,33 +53,91 @@ public sealed class SecureServer : IDisposable
         TcpClient tcpClient = await this._listener.AcceptTcpClientAsync(ct);
         IPAddress? ip = (tcpClient.Client.RemoteEndPoint as IPEndPoint)?.Address;
 
-        X509Certificate2? clientCert = null;
-        Certificate? realCert = null;
-        SecureConnectionUtils.ConnectionResult result = SecureConnectionUtils.ConnectionResult.Success;
+        using TcpListener recoveryListener = new(IPAddress.Any, SecureConnectionUtils.RecoveryPort);
+        recoveryListener.Start();
+
+        SecureConnection? connection = null;
         SecureConnectionUtils.RejectionReason reason = SecureConnectionUtils.RejectionReason.None;
-        
-        SslStream sslStream = new(tcpClient.GetStream(), true, Validate);
-        SecureConnection? connection;
+        SecureConnectionUtils.ConnectionResult result = SecureConnectionUtils.ConnectionResult.DidNotAttempt;
+
+        TaskCompletionSource<IKeyPair?> authAttemptedTask = new();
+        SshSessionConfiguration config = new();
+        SshServerSession session = new(config, new TraceSource("AdLib_SshClient"));
+        session.Credentials = new SshServerCredentials(this._identity.Keys);
+        TaskCompletionSource<bool> authCompleteTask = new();
 
         try
         {
-            SslServerAuthenticationOptions options = new()
+            session.Authenticating += (_, args) =>
             {
-                ServerCertificate = this._identity.Cert,
-                ClientCertificateRequired = true,
-                EnabledSslProtocols = SslProtocols.Tls13,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                authAttemptedTask.TrySetResult(args.PublicKey);
+
+                ClaimsPrincipal? ret = SecureConnectionUtils.ServerValidateRemote(
+                    ip?.ToString() ?? "", args.PublicKey, args.AuthenticationType,
+                    this._trustStore, out result
+                );
+
+                authCompleteTask.TrySetResult(ret is not null);
+                args.AuthenticationTask = Task.FromResult(ret);
             };
 
-            await sslStream.AuthenticateAsServerAsync(options, ct);
-            connection = new SecureConnection(tcpClient, sslStream);
+            session.Closed += (_, _) =>
+            {
+                if (!authAttemptedTask.Task.IsCompleted) authAttemptedTask.TrySetResult(null);
+                authCompleteTask.TrySetResult(false);
+            };
+
+            await session.ConnectAsync(tcpClient.GetStream(), ct);
+
+            bool shouldRecover;
+
+            try
+            {
+                if (await authCompleteTask.Task)
+                {
+                    SshChannel channel = await session.AcceptChannelAsync(ct);
+                    connection = new SecureConnection(tcpClient, channel);
+                    shouldRecover = false;
+                }
+                else
+                {
+                    shouldRecover = true;
+                }
+            }
+            catch (SshConnectionException)
+            {
+                shouldRecover = true;
+            }
+
+            if (shouldRecover)
+            {
+                if (!authAttemptedTask.Task.IsCompleted) authAttemptedTask.TrySetResult(null);
+
+                CancellationTokenSource timeout = new(TimeSpan.FromSeconds(RecoveryTimeoutSeconds));
+                ct.Register(timeout.Cancel);
+
+                try
+                {
+                    using TcpClient recoveryClient = await recoveryListener.AcceptTcpClientAsync(timeout.Token);
+
+                    reason = await SecureConnectionUtils.CommunicateRejectionAsync(recoveryClient, result,
+                        timeout.Token);
+                }
+                catch (Exception e) when (e is OperationCanceledException or TimeoutException)
+                {
+                    reason = SecureConnectionUtils.RejectionReason.CouldNotGetReason;
+                }
+
+                tcpClient.Dispose();
+                session.Dispose();
+                connection = null;
+            }
         }
-        catch (AuthenticationException)
+        catch
         {
-            reason = await SecureConnectionUtils.CommunicateRejectionAsync(tcpClient, result, ct);
+            session.Dispose();
             tcpClient.Dispose();
-            await sslStream.DisposeAsync();
-            connection = null;
+            throw;
         }
 
         return new SecureConnectionUtils.ConnectionInfo
@@ -80,16 +146,7 @@ public sealed class SecureServer : IDisposable
             Reason = reason,
             Hostname = ip?.ToString() ?? "<unknown>",
             Connection = connection,
-            Certificate = realCert,
-            PresentedCert = clientCert,
+            PublicKey = await authAttemptedTask.Task,
         };
-
-        bool Validate(object sender, X509Certificate? cert, X509Chain? chain, SslPolicyErrors errors)
-        {
-            return SecureConnectionUtils.ValidateCertificate(
-                ip?.ToString() ?? "", cert, chain, errors, this._trustStore, false,
-                out result, out realCert, out clientCert
-            );
-        }
     }
 }

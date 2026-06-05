@@ -38,7 +38,7 @@ public class IdentityStore
             this._availableIdentityLabels.Add(meta.InternalName,
                 new IdentityLabel(meta.InternalName, meta.FriendlyName));
 
-            this._availableIdentities.Add(Identity.GetCertificateGuid(meta.CertificatePfx), meta);
+            this._availableIdentities.Add(Identity.GetDerivedGuid(meta.PublicKey), meta);
         }
     }
 

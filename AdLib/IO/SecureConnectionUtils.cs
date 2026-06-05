@@ -1,19 +1,20 @@
-using System.Linq;
-using System.Net.Security;
+using System.IO;
 using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
+
+using Microsoft.DevTunnels.Ssh.Algorithms;
+using Microsoft.DevTunnels.Ssh.Events;
 
 namespace AdLib.IO;
 
 public static class SecureConnectionUtils
 {
     public delegate void AuthenticationErrorHandler(
-        string host, Certificate? cert, X509Certificate? presentedCert,
+        string host, PublicKeyInfo? foundKey, IKeyPair? presentedKey,
         ConnectionResult result, RejectionReason reason
     );
 
@@ -24,123 +25,80 @@ public static class SecureConnectionUtils
         BadCertificate = 0x10,
         UntrustedCertificate = 0x11,
         MismatchedCertificate = 0x12,
+        InvalidMethod = 0x20,
         UnspecifiedError = 0xFF,
     }
 
     public enum RejectionReason : byte
     {
         None = 0x00,
-        UntrustedCertificate = 0x01,
-        MismatchedCertificate = 0x02,
-        BadCertificate = 0x03,
+        UntrustedCertificate = 0x10,
+        MismatchedCertificate = 0x11,
+        BadCertificate = 0x12,
+        InvalidMethod = 0x20,
+        CouldNotGetReason = 0xFE,
         UnspecifiedError = 0xFF,
     }
 
     public const ushort Port = 7477;
+    public const ushort RecoveryPort = 7478;
 
-    private static readonly HashAlgorithmName CertHash = HashAlgorithmName.SHA3_256;
-
-    public static bool ValidateCertificate(
-        string hostName, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors,
-        TrustStore trustedCerts, bool validateHostnames,
-        out ConnectionResult result, out Certificate? certInfo, out X509Certificate2? presentedCert
+    public static ClaimsPrincipal? ServerValidateRemote(
+        string? host, IKeyPair? publicKey, SshAuthenticationType type, TrustStore trustedCerts,
+        out ConnectionResult result
     )
     {
-        // NOTE: do not use `certificate` directly since it lacks x509certificate2 props/methods
-        // get a hold of the cert in user code
-        presentedCert = certificate switch
-        {
-            null => null,
-            X509Certificate2 cert2 => cert2,
-            _ => new X509Certificate2(certificate),
-        };
+        result = ConnectionResult.UnspecifiedError;
 
-        // not validated yet, so we can't return anything
-        certInfo = null;
-
-        if (presentedCert is null) // means server didn't even try to authenticate
+        // assert proper method
+        if (type != SshAuthenticationType.ClientPublicKey)
         {
-            result = ConnectionResult.BadCertificate;
-            return false;
+            result = ConnectionResult.InvalidMethod;
+            return null;
         }
 
-        // we can safely ignore a name mismatch - in fact, this is required because the server can change
-        // hostnames, and that would make a cert invalid
-        sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateNameMismatch;
-        sslPolicyErrors &= ~SslPolicyErrors.RemoteCertificateChainErrors;
-
-        // ignore:
-        // - circular chains (self-signed)
-        // - group policy weirdness
-        // - self-signed roots
-        // - partial chains (self-signing again)
-        // - bad/no revocation server (bc they can't be revoked)
-        const X509ChainStatusFlags ignoredFlags =
-            X509ChainStatusFlags.Cyclic | X509ChainStatusFlags.NoIssuanceChainPolicy |
-            X509ChainStatusFlags.UntrustedRoot | X509ChainStatusFlags.PartialChain |
-            X509ChainStatusFlags.RevocationStatusUnknown | X509ChainStatusFlags.OfflineRevocation;
-
-        // reassess chain to see if there'll be any non-ignored errors
-        if (chain?.ChainStatus.Any(s => (s.Status & ~ignoredFlags) != X509ChainStatusFlags.NoError) ?? false)
+        // check if key is known - no host check
+        if (!trustedCerts.HasPlainKey(publicKey))
         {
-            sslPolicyErrors |= SslPolicyErrors.RemoteCertificateChainErrors;
+            result = ConnectionResult.UntrustedCertificate;
+            return null;
         }
 
-        // some error
-        if (sslPolicyErrors != SslPolicyErrors.None)
+        // all checks successful
+        result = ConnectionResult.Success;
+        return new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, host ?? "")]));
+    }
+
+    public static ClaimsPrincipal? ClientValidateRemote(
+        string host, IKeyPair? publicKey, SshAuthenticationType type, TrustStore trustedCerts,
+        out ConnectionResult result
+    )
+    {
+        result = ConnectionResult.UnspecifiedError;
+
+        // assert proper method
+        if (type != SshAuthenticationType.ServerPublicKey)
         {
-            // bad certificate
-            result = ConnectionResult.BadCertificate;
-            return false;
+            result = ConnectionResult.InvalidMethod;
+            return null;
         }
 
-        Certificate? cert;
-
-        if (validateHostnames)
+        // check public key hostname
+        if (!trustedCerts.IsKnown(host))
         {
-            if (trustedCerts.TryGetCertificate(hostName, out HostCertificate? foundCert))
-            {
-                cert = foundCert.Certificate;
-            }
-            else
-            {
-                // untrusted, but not spoofed - can ask user for confirmation
-                result = ConnectionResult.UntrustedCertificate;
-                return false;
-            }
-        }
-        else
-        {
-            // validate by thumbprint
-            byte[] presentedCertHash = presentedCert.GetCertHash(CertHash);
-
-            Certificate? possibleCert =
-                trustedCerts.GetCertificateByThumbprintOrDefault(presentedCertHash, CertHash);
-
-            if (possibleCert is null) // no match
-            {
-                // ^^
-                result = ConnectionResult.UntrustedCertificate;
-                return false;
-            }
-
-            cert = possibleCert;
+            result = ConnectionResult.UntrustedCertificate;
+            return null;
         }
 
-        X509Certificate2 realCert = cert.X509Cert;
-        bool status = realCert.GetCertHash(CertHash).SequenceEqual(presentedCert.GetCertHash(CertHash));
-
-        if (status)
+        if (!trustedCerts.IsPublicKeyValid(host, publicKey))
         {
-            // certs match, authentication successful
-            result = ConnectionResult.Success;
-            return true;
+            result = ConnectionResult.MismatchedCertificate;
+            return null;
         }
 
-        // we've seen this host before, but the cert is different. someone might be trying to
-        // spoof us - do not trust, do not ask for confirmation
-        result = ConnectionResult.MismatchedCertificate;
-        return false;
+        // all checks successful
+        result = ConnectionResult.Success;
+        return new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, host)]));
     }
 
     /// <summary>
@@ -150,46 +108,52 @@ public static class SecureConnectionUtils
     /// </summary>
     /// <param name="client">the client to communicate over</param>
     /// <param name="result">the result of authentication on this host</param>
+    /// <param name="ct">the token to cancel this asynchronous operation</param>
     /// <returns></returns>
     public static async Task<RejectionReason> CommunicateRejectionAsync(
         TcpClient client, ConnectionResult result, CancellationToken ct = default
     )
     {
-        await client.GetStream().WriteAsync(
-            new[]
+        try
+        {
+            await client.GetStream().WriteAsync(new[]
             {
                 (byte)(result switch
                 {
+                    ConnectionResult.UnspecifiedError => RejectionReason.UnspecifiedError,
                     ConnectionResult.BadCertificate => RejectionReason.BadCertificate,
                     ConnectionResult.MismatchedCertificate => RejectionReason.MismatchedCertificate,
                     ConnectionResult.UntrustedCertificate => RejectionReason.UntrustedCertificate,
-                    ConnectionResult.UnspecifiedError => RejectionReason.UnspecifiedError,
+                    ConnectionResult.InvalidMethod => RejectionReason.InvalidMethod,
                     ConnectionResult.Success => RejectionReason.None,
                     _ => RejectionReason.UnspecifiedError,
                 }),
-            }, ct
-        );
+            }, ct);
 
-        // see if there's a reason (defaults to None)
-        byte[] reason = new byte[1];
-        int processed = await client.GetStream().ReadAsync(reason, ct);
+            // see if there's a reason (defaults to None)
+            byte[] reason = new byte[1];
+            int processed = await client.GetStream().ReadAsync(reason, ct);
 
-        // make sure stream isn't closed yet
-        if (processed > 0)
-        {
-            return (RejectionReason)reason[0];
+            // make sure stream isn't closed yet
+            if (processed > 0)
+            {
+                return (RejectionReason)reason[0];
+            }
+
+            return RejectionReason.CouldNotGetReason;
         }
-
-        return RejectionReason.UnspecifiedError;
+        catch (IOException)
+        {
+            return RejectionReason.CouldNotGetReason;
+        }
     }
 
     public struct ConnectionInfo
     {
-        public ConnectionResult Result;
-        public RejectionReason Reason;
-        public string Hostname;
-        public X509Certificate2? PresentedCert;
-        public SecureConnection? Connection;
-        public Certificate? Certificate;
+        public required ConnectionResult Result;
+        public required RejectionReason Reason;
+        public required string Hostname;
+        public required SecureConnection? Connection;
+        public required IKeyPair? PublicKey;
     }
 }

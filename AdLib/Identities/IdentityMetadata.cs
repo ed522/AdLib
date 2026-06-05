@@ -9,7 +9,7 @@ public class IdentityMetadata
     public const string FILE_EXTENSION = ".adi";
 
     public required Guid InternalName { get; init; }
-    public required byte[] CertificatePfx { get; init; }
+    public required byte[] PublicKey { get; init; }
     public required byte[] EncryptedPrivateKey { get; init; }
     public required string FriendlyName { get; init; }
 
@@ -28,15 +28,4 @@ public class IdentityMetadata
         byte[] jsonBytes = JsonSerializer.SerializeToUtf8Bytes(this, SourceGenerationContext.Default.IdentityMetadata);
         File.WriteAllBytes(fullPath, jsonBytes);
     }
-
-    public string GetSanitizedFileName() =>
-        this.FriendlyName.Replace('/', '_')
-            .Replace(':', '_')
-            .Replace('<', '_')
-            .Replace('>', '_')
-            .Replace('"', '_')
-            .Replace('*', '_')
-            .Replace('|', '_')
-            .Replace('?', '_')
-            .Replace('\\', '_');
 }

@@ -1,12 +1,14 @@
 using System;
-using System.Net.Security;
+using System.Diagnostics;
 using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
+
+using Microsoft.DevTunnels.Ssh;
+using Microsoft.DevTunnels.Ssh.Algorithms;
 
 using static AdLib.IO.SecureConnectionUtils;
 
@@ -14,10 +16,11 @@ namespace AdLib.IO;
 
 public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : IDisposable
 {
+    private const int RecoveryTimeout = 10;
+
     private SecureConnection? _connection;
 
-    public SslStream? SslStream => this._connection?.SslStream;
-    public bool HasData => this._connection?.HasData ?? false;
+    public SshChannel? Channel => this._connection?.Channel;
 
     public void Dispose() { this._connection?.Dispose(); }
 
@@ -27,55 +30,69 @@ public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : I
         await tcpClient.ConnectAsync(host, Port, ct);
 
         ConnectionResult result = ConnectionResult.DidNotAttempt;
-        X509Certificate2? presentedCert = null;
-        Certificate? realCert = null;
         RejectionReason reason = RejectionReason.None;
 
-        SslStream sslStream = new(tcpClient.GetStream(), true, Validate);
+        SshSessionConfiguration config = new();
+        SshClientCredentials clientCreds = new(identity.InternalName.ToString(), identity.Keys);
 
-        try
+        SshClientSession session = new(config, new TraceSource("AdLib_SshClient"));
+        TaskCompletionSource<IKeyPair?> keyTask = new();
+
+        await session.ConnectAsync(tcpClient.GetStream(), ct);
+
+        session.Authenticating += (_, args) =>
         {
-            SslClientAuthenticationOptions options = new()
-            {
-                TargetHost = host,
-                ClientCertificates = [identity.Cert],
-                EnabledSslProtocols = SslProtocols.Tls13,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-            };
+            ClaimsPrincipal? value = ClientValidateRemote(
+                host, args.PublicKey, args.AuthenticationType, trustedCerts, out result
+            );
 
-            await sslStream.AuthenticateAsClientAsync(options, ct);
+            keyTask.SetResult(args.PublicKey);
+            args.AuthenticationTask = Task.FromResult(value);
+        };
+
+        if (await session.AuthenticateAsync(clientCreds, ct))
+        {
+            SshChannel channel = await session.OpenChannelAsync(ct);
             // cert + result are now set, unless validator never ran
-            this._connection = new SecureConnection(tcpClient, sslStream);
+            this._connection = new SecureConnection(tcpClient, channel);
         }
-        catch (AuthenticationException)
+        else
         {
-            reason = await CommunicateRejectionAsync(tcpClient, result, ct);
+            // clean up (since the streams are invalid now)
+            this._connection = null;
+            // if we didn't even get far enough to authenticate then indicate there is no key
+            if (!keyTask.Task.IsCompleted) keyTask.TrySetResult(null);
+
+            await session.CloseAsync(SshDisconnectReason.ByApplication, "Authentication failed");
+
+            session.Dispose();
             tcpClient.Dispose();
 
-            // clean up (since the streams are invalid now)
-            await sslStream.DisposeAsync();
-            tcpClient.Dispose();
-            this._connection = null;
+            CancellationTokenSource recoveryConnectTimeout = new(TimeSpan.FromSeconds(RecoveryTimeout));
+            await using CancellationTokenRegistration _ = ct.Register(recoveryConnectTimeout.Cancel);
+
+            // since we need to reconnect, if the host becomes completely unavailable, don't keep trying for forever
+            try
+            {
+                using TcpClient recoveryClient = new();
+                await recoveryClient.ConnectAsync(host, RecoveryPort, recoveryConnectTimeout.Token);
+                reason = await CommunicateRejectionAsync(recoveryClient, result, recoveryConnectTimeout.Token);
+            }
+            catch (Exception e) when (e is OperationCanceledException or TimeoutException)
+            {
+                reason = RejectionReason.CouldNotGetReason;
+            }
         }
+
+        IKeyPair? pair = await keyTask.Task;
 
         return new ConnectionInfo
         {
             Result = result,
             Hostname = host,
             Connection = this._connection,
-            Certificate = realCert,
-            PresentedCert = presentedCert,
+            PublicKey = pair,
             Reason = reason,
         };
-
-        // for the `result` capture
-        bool Validate(object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors errors)
-        {
-            return ValidateCertificate(
-                host, certificate, chain, errors, trustedCerts, false,
-                out result, out realCert, out presentedCert
-            );
-        }
     }
-
 }

@@ -1,7 +1,8 @@
 using System;
-using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
+
+using Microsoft.DevTunnels.Ssh;
 
 namespace AdLib.IO;
 
@@ -13,23 +14,22 @@ public sealed class SecureConnection : IDisposable
 {
     private bool _disposed;
 
-    public SecureConnection(TcpClient insecureTcpClient, SslStream sslStream)
+    public SecureConnection(TcpClient insecureClient, SshChannel channel)
     {
-        this._insecureTcpClient = insecureTcpClient;
-        this.SslStream = sslStream;
+        this._insecureClient = insecureClient;
+        this.Channel = channel;
     }
 
-    private readonly TcpClient _insecureTcpClient;
-    public SslStream SslStream { get; }
-
-    public bool HasData => this._insecureTcpClient is { Connected: true, Available: > 0 };
+    private readonly TcpClient _insecureClient;
+    public SshChannel Channel { get; }
 
     public void Dispose()
     {
         if (!Interlocked.CompareExchange(ref this._disposed, true, false))
         {
-            this.SslStream.Dispose();
-            this._insecureTcpClient.Dispose();
+            this.Channel.Dispose();
+            this.Channel.Session.Dispose();
+            this._insecureClient.Dispose();
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 using AdLib.Identities;
 using AdLib.IO;
@@ -18,20 +19,20 @@ public sealed class FileTransferClient : IDisposable
         public required FileEntry[] Files { get; init; }
     }
 
-    private const int CommsLoopDelayMs = 10;
     private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Random _random = new();
     private readonly ConcurrentQueue<ClientRequest> _requests = new();
+    private readonly ConcurrentQueue<IMessage> _messages = new();
 
     private string _latestDownload = "";
-    private SecureClient? _tlsClient;
+    private SecureClient? _secureClient;
     public bool IsConnected { get; private set; }
     public string? ServerFolder { get; private set; }
 
     public void Dispose()
     {
-        this._tlsClient?.Dispose();
+        this._secureClient?.Dispose();
 
         foreach ((string partPath, FileStream stream) download in this._activeDownloads.Values)
         {
@@ -42,7 +43,7 @@ public sealed class FileTransferClient : IDisposable
     }
 
     public event EventHandler<FileListingReceivedEventArgs>? FileListingReceived;
-    public event SecureConnectionUtils.AuthenticationErrorHandler? CertificateError;
+    public event SecureConnectionUtils.AuthenticationErrorHandler? AuthenticationError;
     public event Action<string>? GracefullyDisconnected;
     public event Action<string>? ForceDisconnected;
     public event Action<string>? RecoverableError;
@@ -51,16 +52,38 @@ public sealed class FileTransferClient : IDisposable
     public event Action<string>? FileSending;
     public event Action<string>? FileReceiving;
 
-    public void AddRequest(ClientRequest request) { this._requests.Enqueue(request); }
+    // allowed to run by default
+    private readonly SemaphoreSlim _communicationHandle = new(1);
 
-    public void ConnectAndListen(string host, Identity identity, TrustStore store)
+    private class MessageReceivedEventArgs : EventArgs
     {
-        Thread thread = new(() =>
+        public required IMessage Message { get; init; }
+    }
+
+    private class RequestEnteredEventArgs : EventArgs
+    {
+        public required ClientRequest Request { get; init; }
+    }
+
+    private event EventHandler<MessageReceivedEventArgs>? MessageReceived;
+    private event EventHandler<RequestEnteredEventArgs>? RequestEntered;
+
+    public void AddRequest(ClientRequest request)
+    {
+        this._requests.Enqueue(request);
+        this.RequestEntered?.Invoke(this, new RequestEnteredEventArgs { Request = request });
+    }
+
+    public Task ConnectAndListen(string host, Identity identity, TrustStore store)
+    {
+        Task thread = Task.Run(async () =>
         {
             try
             {
-                this._tlsClient = new SecureClient(identity, store);
-                SecureConnectionUtils.ConnectionInfo info = this._tlsClient.ConnectAsync(host).GetAwaiter().GetResult();
+                this._secureClient = new SecureClient(identity, store);
+
+                SecureConnectionUtils.ConnectionInfo info = await this._secureClient.ConnectAsync(host);
+
                 SecureConnection? connection = info.Connection;
                 SecureConnectionUtils.ConnectionResult result = info.Result;
                 SecureConnectionUtils.RejectionReason reason = info.Reason;
@@ -69,9 +92,7 @@ public sealed class FileTransferClient : IDisposable
                 if (result != SecureConnectionUtils.ConnectionResult.Success ||
                     reason != SecureConnectionUtils.RejectionReason.None)
                 {
-                    // note: PresentedCert is the one the server offered, Certificate is the one that we have
-                    // (if any)
-                    if (info.PresentedCert is null)
+                    if (info.PublicKey is null)
                     {
                         IOException ex = new("Remote host did not offer a certificate");
                         this.CloseAfterError(ex);
@@ -79,12 +100,15 @@ public sealed class FileTransferClient : IDisposable
                     }
 
                     // handles adding trust, showing fingerprint, error dialogues etc.
-                    this.CertificateError?.Invoke(host, info.Certificate, info.PresentedCert, result, reason);
+                    this.AuthenticationError?.Invoke(
+                        host, store.FindPublicKeyOrDefault(info.PublicKey), info.PublicKey, result, reason
+                    );
+
                     return;
                 }
 
                 // quick sanity check
-                if (connection is null || this._tlsClient.SslStream is null)
+                if (connection is null || this._secureClient.Channel is null)
                 {
                     // stream is null but no error was thrown - this is a bug
                     InvalidOperationException ex = new("TLS connection is null after creation");
@@ -92,51 +116,59 @@ public sealed class FileTransferClient : IDisposable
                     throw ex;
                 }
 
-                this.IsConnected = true;
+                connection.Channel.DataReceived += (_, args) =>
+                {
+                    using MemoryStream stream = new(args.Array);
+                    IMessage message = FileTransferUtils.ReadMessage(stream);
+                    this._messages.Enqueue(message);
+                    this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
+                };
+
+                // allows thread to continue accepting requests
+                this.MessageReceived += (_, _) => this._communicationHandle.Release();
+                this.RequestEntered += (_, _) => this._communicationHandle.Release();
+
                 // do handshake
-                this.SendMessage(new InitMessage());
-                InitAckMessage acknowledgement = new();
+                await this.SendMessage(new InitMessage());
+                IMessage ackMsg = await this.WaitForMessage();
 
-                // manually check that the init acknowledgement is correct
-                int type = this._tlsClient.SslStream.ReadByte();
-
-                if (type == -1)
+                if (ackMsg is not InitAckMessage acknowledgement)
                 {
-                    IOException ex = new("Stream closed before initialization was completed");
-                    this.CloseAfterError(ex);
-                    throw ex;
+                    throw new InvalidOperationException($"Expected InitAckMessage, got {ackMsg.Header}");
                 }
 
-                // ...
-                if ((MessageType)type != MessageType.InitAck)
-                {
-                    IOException ex = new($"Invalid initialization response: 0x{type:X2}");
-                    this.CloseAfterError(ex);
-                    throw ex;
-                }
+                this.ServerFolder = acknowledgement.SharedFolderPath;
 
-                // no fields to check
-                acknowledgement.Deserialize(this._tlsClient.SslStream);
-
-                // this is the point where we are "connected" (successfully connected to a trusted &
-                // funcitoning host)
+                // this is the point where we are "connected" (successfully connected to a trusted & funcitoning host)
                 this.Connected?.Invoke(host);
+                this.IsConnected = true;
 
-                // comms loop
-                while (!this._cancellationTokenSource.Token.IsCancellationRequested)
+                while (!this._cancellationTokenSource.IsCancellationRequested)
                 {
-                    // safety - all disconnections should also cancel
-                    if (!this.IsConnected)
+                    while (this._messages.TryDequeue(out IMessage? message))
                     {
-                        this._cancellationTokenSource.Cancel();
+                        await this.HandleServerMessage(message);
                     }
 
-                    this.CommunicateLoop(this._tlsClient);
-                    Thread.Sleep(CommsLoopDelayMs); // avoid busy loop
-                    Thread.Yield();
-                }
+                    while (this._requests.TryDequeue(out ClientRequest request))
+                    {
+                        // always prioritize server messages over requests, since other messages could throw off
+                        // certain flows/transactions used by the server
+                        if (!this._messages.IsEmpty) continue;
+                        await this.HandleRequest(request);
+                    }
 
-                // cancelled
+                    // unset when a message/request is entered
+                    await this._communicationHandle.WaitAsync();
+                }
+            }
+            catch (Exception e)when (e is TaskCanceledException or OperationCanceledException
+                                         or AggregateException
+                                         {
+                                             InnerException: TaskCanceledException or OperationCanceledException,
+                                         })
+            {
+                // ignore cancellations
             }
             finally
             {
@@ -144,114 +176,105 @@ public sealed class FileTransferClient : IDisposable
             }
         });
 
-        thread.Start();
+        return thread;
     }
 
-    private void CommunicateLoop(SecureClient secureClient)
+    private async Task<IMessage> WaitForMessage(CancellationToken ct = default)
     {
-        if (secureClient.SslStream == null) return;
+        if (this._messages.TryDequeue(out IMessage? immediate))
+        {
+            return immediate;
+        }
+
+        TaskCompletionSource<IMessage> tcs = new();
+        EventHandler<MessageReceivedEventArgs> onReceived = (_, args) => { tcs.SetResult(args.Message); };
+
+        ct.Register(() => tcs.TrySetCanceled());
+
+        this.MessageReceived += onReceived;
+        IMessage message = await tcs.Task;
+        this.MessageReceived -= onReceived;
+        return message;
+    }
+
+    private async Task SendMessage(IMessage message, CancellationToken ct = default)
+    {
+        if (this._secureClient?.Channel is null) return;
 
         try
         {
-            // client-side requests
-            while (this._requests.TryDequeue(out ClientRequest request))
-            {
-                this.HandleRequest(request);
-            }
-
-            // server messages
-            while (secureClient.HasData)
-            {
-                IMessage message = FileTransferUtils.ReadMessage(secureClient.SslStream);
-                this.HandleServerMessage(message);
-            }
-        }
-        catch (Exception ex) when (ex is EndOfStreamException or IOException or InvalidDataException)
-        {
-            this.ForceDisconnect(ex, FatalError.IOError);
-        }
-        catch (Exception ex) when (ex is not SystemException)
-        {
-            this.ForceDisconnect(ex, FatalError.Unspecified);
-        }
-    }
-
-    private void SendMessage(IMessage message)
-    {
-        if (this._tlsClient?.SslStream == null) return;
-
-        try
-        {
-            FileTransferUtils.SendMessage(this._tlsClient.SslStream, message);
+            MemoryStream stream = new();
+            FileTransferUtils.SendMessage(stream, message);
+            await this._secureClient.Channel.SendAsync(stream.ToArray(), ct);
         }
         catch (Exception ex)
         {
-            this.ForceDisconnect(ex, FatalError.IOError);
+            await this.ForceDisconnect(ex, FatalError.IOError);
             throw;
         }
     }
 
-    private void ExpectAcknowledgement(MessageType type)
+    private async Task ExpectAcknowledgement(MessageType type)
     {
-        if (this._tlsClient?.SslStream == null)
+        if (this._secureClient?.Channel is null)
         {
-            this._cancellationTokenSource.Cancel();
+            await this._cancellationTokenSource.CancelAsync();
             throw new InvalidOperationException("cannot expect when disconnected");
         }
 
-        ControlAckMessage message = new();
-
         try
         {
-            message.Deserialize(this._tlsClient.SslStream);
+            IMessage message = await this.WaitForMessage();
+
+            if (message is not ControlAckMessage acknowledgement)
+            {
+                throw new IOException($"Expected acknowledgement, got {message.Header}");
+            }
+
+            if (acknowledgement.ControlCode != (byte)type)
+            {
+                throw new IOException($"Expected {type} acknowledgement, got {acknowledgement.ControlCode}");
+            }
         }
         catch (Exception ex) when (ex is EndOfStreamException or IOException)
         {
-            this.ForceDisconnect(ex, FatalError.IOError);
-            throw;
-        }
-
-        if (message.ControlCode != (byte)type)
-        {
-            InvalidOperationException ex = new($"Expected {type} acknowledgement, got {message.ControlCode}");
-            this.ForceDisconnect(ex, FatalError.InvalidAcknowledgement);
-            throw ex;
+            await this.ForceDisconnect(ex, FatalError.IOError);
         }
     }
 
-    private void HandleRequest(ClientRequest request)
+    private async Task HandleRequest(ClientRequest request)
     {
         switch (request.Type)
         {
             case ClientRequestType.PutPath:
-                this.UploadPath(request.Path, Path.GetFileName(request.Path));
+                await this.UploadPath(request.Path, Path.GetFileName(request.Path));
                 break;
 
             case ClientRequestType.GetPath:
-                this.SendMessage(new FileRequestMessage { Path = request.Path });
+                await this.SendMessage(new FileRequestMessage { Path = request.Path });
                 break;
 
             case ClientRequestType.DeleteRemotePath:
-                this.SendMessage(new DeleteMessage { Path = request.Path });
-                this.ExpectAcknowledgement(MessageType.Delete);
+                await this.SendMessage(new DeleteMessage { Path = request.Path });
+                await this.ExpectAcknowledgement(MessageType.Delete);
                 break;
 
             case ClientRequestType.MakeRemoteDir:
-                this.SendMessage(new MakeDirMessage { Path = request.Path });
-                this.ExpectAcknowledgement(MessageType.MakeDir);
+                await this.SendMessage(new MakeDirMessage { Path = request.Path });
+                await this.ExpectAcknowledgement(MessageType.MakeDir);
                 break;
 
             case ClientRequestType.ListFiles:
-                this.SendMessage(new ListFilesMessage { Path = request.Path });
+                await this.SendMessage(new ListFilesMessage { Path = request.Path });
                 break;
 
             case ClientRequestType.Disconnect:
-                this.SendMessage(new EndMessage());
+                await this.SendMessage(new EndMessage());
                 break;
         }
     }
 
-    private void HandleServerMessage(IMessage message)
+    private async Task HandleServerMessage(IMessage message)
     {
         switch (message)
         {
@@ -260,7 +283,7 @@ public sealed class FileTransferClient : IDisposable
                 break;
 
             case ErrorFatalMessage fatal:
-                this._cancellationTokenSource.Cancel();
+                await this._cancellationTokenSource.CancelAsync();
                 this.IsConnected = false;
                 this.ForceDisconnected?.Invoke($"Fatal server error (error code 0x{fatal.Errno:X8})");
                 break;
@@ -270,9 +293,9 @@ public sealed class FileTransferClient : IDisposable
                 break;
 
             case EndMessage:
-                this.SendMessage(new EndAckMessage());
+                await this.SendMessage(new EndAckMessage());
                 this.GracefullyDisconnected?.Invoke("Disconnected by server");
-                this._cancellationTokenSource.Cancel();
+                await this._cancellationTokenSource.CancelAsync();
                 this.IsConnected = false;
                 break;
 
@@ -291,7 +314,7 @@ public sealed class FileTransferClient : IDisposable
                 break;
 
             case DataMessage data:
-                this.HandleIncomingData(data);
+                await this.HandleIncomingData(data);
                 break;
 
             case DataFinishedMessage finished:
@@ -303,11 +326,11 @@ public sealed class FileTransferClient : IDisposable
                 break;
 
             case StatusRequestMessage status: // not used by server
-                this.SendMessage(new StatusResponseMessage { Random = status.Random });
+                await this.SendMessage(new StatusResponseMessage { Random = status.Random });
                 break;
 
             case ResendRequestMessage resend:
-                FileTransferUtils.ResendBlock(resend, this.SendMessage);
+                await FileTransferUtils.ResendBlockAsync(resend, this.SendMessage);
                 break;
 
             case ControlAckMessage ack: // will manually be expected
@@ -320,8 +343,8 @@ public sealed class FileTransferClient : IDisposable
 
     private void Disconnect()
     {
-        this._tlsClient?.Dispose();
-        this._tlsClient = null;
+        this._secureClient?.Dispose();
+        this._secureClient = null;
         this._cancellationTokenSource.Cancel();
         this._cancellationTokenSource.Dispose();
         this.IsConnected = false;
@@ -335,20 +358,20 @@ public sealed class FileTransferClient : IDisposable
         this.ForceDisconnected?.Invoke(msg);
     }
 
-    private void ForceDisconnect(Exception ex, FatalError errno) =>
-        this.ForceDisconnect($"{ex.GetType()}: {ex.Message}", errno);
+    private async Task ForceDisconnect(Exception ex, FatalError errno) =>
+        await this.ForceDisconnect($"{ex.GetType()}: {ex.Message}", errno);
 
-    private void ForceDisconnect(string msg, FatalError errno)
+    private async Task ForceDisconnect(string msg, FatalError errno)
     {
-        if (this._tlsClient?.SslStream is not null) // true if connected + handshake completed before error
+        if (this._secureClient?.Channel is not null) // true if connected + handshake completed before error
         {
-            this.SendMessage(new ErrorFatalMessage { Errno = errno });
+            await this.SendMessage(new ErrorFatalMessage { Errno = errno });
         }
 
         this.CloseAfterError(msg);
     }
 
-    private void HandleIncomingData(DataMessage data)
+    private async Task HandleIncomingData(DataMessage data)
     {
         if (this._latestDownload != data.Path)
         {
@@ -356,17 +379,14 @@ public sealed class FileTransferClient : IDisposable
             this.FileReceiving?.Invoke(data.Path);
         }
 
-        FileTransferUtils.ProcessDownloadChunk(data, this._activeDownloads, this._random, this.SendMessage);
+        await FileTransferUtils.ProcessDownloadChunkAsync(data, this._activeDownloads, this._random, this.SendMessage);
     }
 
-    private void FinalizeDownload(string path)
-    {
-        FileTransferUtils.FinalizeDownload(path, this._activeDownloads);
-    }
+    private void FinalizeDownload(string path) { FileTransferUtils.FinalizeDownload(path, this._activeDownloads); }
 
-    private void UploadPath(string localPath, string remotePath)
+    private async Task UploadPath(string localPath, string remotePath)
     {
         this.FileSending?.Invoke(localPath);
-        FileTransferUtils.UploadPath(localPath, remotePath, this.SendMessage);
+        await FileTransferUtils.UploadPathAsync(localPath, remotePath, this.SendMessage);
     }
 }

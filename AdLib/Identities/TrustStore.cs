@@ -4,36 +4,37 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 
 using AdLib.Cryptography;
+
+using Microsoft.DevTunnels.Ssh.Algorithms;
 
 namespace AdLib.Identities;
 
 public class TrustStore
 {
-    private readonly Dictionary<string, HostCertificate> _trustedHostCerts = [];
-    private readonly List<Certificate> _trustedCerts = [];
+    private readonly Dictionary<string, HostPublicKeyInfo> _trustedHostKeys = [];
+    private readonly List<PublicKeyInfo> _trustedKeys = [];
 
-    public IEnumerable<string> KnownHosts => this._trustedHostCerts.Keys;
-    public IEnumerable<HostCertificate> TrustedHostCertificates => this._trustedHostCerts.Values;
-    public IEnumerable<Certificate> TrustedCertificates => this._trustedCerts.AsReadOnly();
+    public IEnumerable<string> KnownHosts => this._trustedHostKeys.Keys;
+    public IEnumerable<HostPublicKeyInfo> TrustedHostPublicKeys => this._trustedHostKeys.Values;
+    public IEnumerable<PublicKeyInfo> TrustedPublicKeys => this._trustedKeys.AsReadOnly();
 
-    public IEnumerable<X509Certificate> TrustedX509Certificates =>
-        this._trustedCerts
-            .Select(cert => cert.X509Cert)
-            .Concat(this._trustedHostCerts.Values.Select(c => c.Certificate.X509Cert));
+    public IEnumerable<IKeyPair> TrustedKeys =>
+        this._trustedKeys
+            .Select(k => k.PublicKey)
+            .Concat(this._trustedHostKeys.Values.Select(c => c.PublicKeyInfo.PublicKey));
 
-    public IEnumerable<Certificate> AllTrustedCertificates =>
-        this._trustedCerts.Concat(this._trustedHostCerts.Values.Select(c => c.Certificate));
+    public IEnumerable<PublicKeyInfo> AllTrustedKeys =>
+        this._trustedKeys.Concat(this._trustedHostKeys.Values.Select(c => c.PublicKeyInfo));
 
     public TrustStore() { }
 
-    public TrustStore(IEnumerable<Certificate>? trustedCerts)
+    public TrustStore(IEnumerable<PublicKeyInfo>? trustedKeys)
     {
-        if (trustedCerts is not null)
+        if (trustedKeys is not null)
         {
-            this.TrustAll(trustedCerts);
+            this.TrustAll(trustedKeys);
         }
     }
 
@@ -41,7 +42,7 @@ public class TrustStore
     {
         // search for all keys
         IEnumerable<string> files = Directory.EnumerateFiles(folder)
-                                             .Where(f => f.EndsWith(Certificate.FILE_EXTENSION));
+                                             .Where(f => f.EndsWith(PublicKeyInfo.FILE_EXTENSION));
 
         foreach (string file in files)
         {
@@ -49,30 +50,29 @@ public class TrustStore
             if (password is null)
             {
                 // load plaintext
-                Certificate cert = Certificate.LoadCertificate(file);
-                this.Trust(cert);
+                PublicKeyInfo key = PublicKeyInfo.LoadPublicKeyInfo(file);
+                this.Trust(key);
             }
             else
             {
                 Lockbox box = Lockbox.DecryptLockbox(File.ReadAllBytes(file), [], password);
                 if (box.Data is null) throw new InvalidOperationException("Failed to decrypt lockbox");
-                Certificate cert = Certificate.LoadCertificate(box.Data);
-                this.Trust(cert);
+                PublicKeyInfo key = PublicKeyInfo.LoadPublicKeyInfo(box.Data);
+                this.Trust(key);
             }
         }
     }
 
     public void Save(string folder, char[]? password)
     {
-        IEnumerable<(string, Certificate)> files =
-            from cert in this.AllTrustedCertificates
-            let path = Path.Combine(folder, cert.InternalName + Certificate.FILE_EXTENSION)
-            select (path, cert);
+        IEnumerable<(string, PublicKeyInfo)> files =
+            from key in this.AllTrustedKeys
+            let path = Path.Combine(folder, GetFileName(key))
+            select (path, key);
 
-        foreach ((string path, Certificate cert) in files)
+        foreach ((string path, PublicKeyInfo key) in files)
         {
-            // string path = Path.Combine(folder, cert.InternalName + Certificate.FILE_EXTENSION);
-            byte[] data = cert.SerializeCertificate();
+            byte[] data = key.SerializePublicKeyInfo();
 
             if (password is not null)
             {
@@ -87,58 +87,89 @@ public class TrustStore
         }
     }
 
-    public bool IsCertificateValid(HostCertificate cert) =>
-        this._trustedHostCerts.ContainsKey(cert.Host) && cert.Equals(this._trustedHostCerts[cert.Host]);
+    private static string GetFileName(PublicKeyInfo key) =>
+        key.InternalName.ToString("D") + PublicKeyInfo.FILE_EXTENSION;
 
-    public bool IsKnown(string host) => this._trustedHostCerts.ContainsKey(host);
+    public bool IsPublicKeyValid(HostPublicKeyInfo key) =>
+        this._trustedHostKeys.ContainsKey(key.Host) && key.Equals(this._trustedHostKeys[key.Host]);
 
-    public HostCertificate? GetCertificateByHostOrDefault(string host, HostCertificate? defaultVal = null) =>
-        this._trustedHostCerts.GetValueOrDefault(host) ?? defaultVal;
-
-    public Certificate? GetCertificateByThumbprintOrDefault(
-        byte[] thumbprint, HashAlgorithmName certHash, Certificate? defaultVal = null
-    ) => this.AllTrustedCertificates
-             .Where(c => c.X509Cert.GetCertHash(certHash).SequenceEqual(thumbprint))
-             .FirstOrDefault(defaultVal);
-
-    public void Trust(Certificate cert) => this._trustedCerts.Add(cert);
-    public void Trust(HostCertificate cert) => this._trustedHostCerts[cert.Host] = cert;
-
-    public void Untrust(string host) => this._trustedHostCerts.Remove(host);
-    public void Untrust(Certificate cert) => this._trustedCerts.Remove(cert);
-
-    public void Untrust(HostCertificate cert)
+    public bool IsPublicKeyValid(string? host, IKeyPair? publicKey)
     {
-        if (cert.Equals(this._trustedHostCerts[cert.Host]))
-            this._trustedHostCerts.Remove(cert.Host);
+        if (host is null || publicKey is null)
+        {
+            return false;
+        }
+
+        byte[] fingerprint = publicKey.GetPublicKeyBytes().Array;
+
+        return this._trustedHostKeys.ContainsKey(host) &&
+               this._trustedHostKeys[host].PublicKeyInfo.PublicKey.GetPublicKeyBytes()
+                   .SequenceEqual(fingerprint);
     }
 
-    public void TrustAll(IEnumerable<Certificate> certs)
+    public bool IsKnown(string host) => this._trustedHostKeys.ContainsKey(host);
+
+    public HostPublicKeyInfo? GetKeyByHostOrDefault(string host, HostPublicKeyInfo? defaultVal = null) =>
+        this._trustedHostKeys.GetValueOrDefault(host) ?? defaultVal;
+
+    public PublicKeyInfo? GetKeyByThumbprintOrDefault(
+        byte[] thumbprint, HashAlgorithmName keyHash, PublicKeyInfo? defaultVal = null
+    ) => this.AllTrustedKeys
+             .Where(c => c.PublicKey.GetThumbprint(keyHash).SequenceEqual(thumbprint))
+             .FirstOrDefault(defaultVal);
+
+    public void Trust(PublicKeyInfo key) => this._trustedKeys.Add(key);
+    public void Trust(HostPublicKeyInfo key) => this._trustedHostKeys[key.Host] = key;
+
+    public void Untrust(string host) => this._trustedHostKeys.Remove(host);
+    public void Untrust(PublicKeyInfo key) => this._trustedKeys.Remove(key);
+
+    public void Untrust(HostPublicKeyInfo key)
     {
-        foreach (Certificate cert in certs)
+        if (key.Equals(this._trustedHostKeys[key.Host]))
         {
-            this.Trust(cert);
+            this._trustedHostKeys.Remove(key.Host);
         }
     }
 
-    public void TrustAll(IEnumerable<HostCertificate> certs)
+    public void TrustAll(IEnumerable<PublicKeyInfo> keys)
     {
-        foreach (HostCertificate cert in certs)
+        foreach (PublicKeyInfo key in keys)
         {
-            this.Trust(cert);
+            this.Trust(key);
+        }
+    }
+
+    public void TrustAll(IEnumerable<HostPublicKeyInfo> keys)
+    {
+        foreach (HostPublicKeyInfo key in keys)
+        {
+            this.Trust(key);
         }
     }
 
     public TrustStore Combine(TrustStore other)
     {
         TrustStore combined = new();
-        combined.TrustAll(this._trustedCerts);
-        combined.TrustAll(other._trustedCerts);
+        combined.TrustAll(this._trustedKeys);
+        combined.TrustAll(other._trustedKeys);
         return combined;
     }
 
-    public bool TryGetCertificate(string host, [MaybeNullWhen(false)] out HostCertificate certificate)
+    public bool TryGetPublicKey(string host, [MaybeNullWhen(false)] out HostPublicKeyInfo publicKeyInfo) => this._trustedHostKeys.TryGetValue(host, out publicKeyInfo);
+
+    public PublicKeyInfo? FindPublicKeyOrDefault(IKeyPair keys, PublicKeyInfo? defaultValue = null)
     {
-        return this._trustedHostCerts.TryGetValue(host, out certificate);
+        byte[] key = keys.GetPublicKeyBytes().Array;
+
+        return this.AllTrustedKeys.FirstOrDefault(k => k.PublicKey.GetPublicKeyBytes().SequenceEqual(key)) ??
+               defaultValue;
+    }
+
+    public bool HasPlainKey(IKeyPair? publicKey)
+    {
+        byte[]? key = publicKey?.GetPublicKeyBytes().Array;
+        if (key is null) return false;
+        return this._trustedKeys.Any(k => k.PublicKey.GetPublicKeyBytes().SequenceEqual(key));
     }
 }

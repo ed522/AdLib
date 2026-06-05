@@ -3,14 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Hashing;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
+using AdLib.IO.Files;
 using AdLib.IO.Messages;
 
 namespace AdLib.IO;
 
 public static class FileTransferUtils
 {
-    private const int FILE_BUFFER_SIZE = 32768;
+    private const int FileBufferSize = 32768;
 
     /// <summary>
     ///     Reads a message from the given stream. One byte is read from the stream to determine the
@@ -92,16 +95,18 @@ public static class FileTransferUtils
     ///     the likelihood of collisions.
     /// </param>
     /// <param name="sendMessageAction">an action that sends a message to the remote host</param>
-    public static void ProcessDownloadChunk(
+    /// <param name="ct">a cancellation token that can be used to cancel the processing of this chunk</param>
+    public static async Task ProcessDownloadChunkAsync(
         DataMessage data,
         Dictionary<string, (string partPath, FileStream stream)> activeDownloads,
         Random random,
-        Action<IMessage> sendMessageAction
+        Func<IMessage, CancellationToken, Task> sendMessageAction,
+        CancellationToken ct = default
     )
     {
         if (!activeDownloads.TryGetValue(data.Path, out (string partPath, FileStream stream) download))
         {
-            const int PART_RANDOM_EXTENSION_LENGTH = 8 * 6 / 8; // first number controls character count (8)
+            const int partRandomExtensionLength = 8 * 6 / 8; // first number controls character count (8)
             string partPath;
 
             // check for collisions
@@ -132,7 +137,7 @@ public static class FileTransferUtils
             // fault if you do and this breaks
             do
             {
-                byte[] randomBytes = new byte[PART_RANDOM_EXTENSION_LENGTH];
+                byte[] randomBytes = new byte[partRandomExtensionLength];
                 random.NextBytes(randomBytes);
                 partPath = $"{data.Path}.{Convert.ToBase64String(randomBytes)}.part";
             } while (File.Exists(partPath));
@@ -156,12 +161,23 @@ public static class FileTransferUtils
                 Offset = (ulong)download.stream.Position,
             };
 
-            sendMessageAction(resendRequest);
+            await sendMessageAction(resendRequest, ct);
         }
 
-        download.stream.Write(data.Data);
+        await download.stream.WriteAsync(data.Data, ct);
     }
 
+    public static Task ProcessDownloadChunkAsync(
+        DataMessage data,
+        Dictionary<string, (string partPath, FileStream stream)> activeDownloads,
+        Random random,
+        Func<IMessage, Task> sendMessageAction,
+        CancellationToken ct = default
+    )
+    {
+        return ProcessDownloadChunkAsync(data, activeDownloads, random, (msg, _) => sendMessageAction(msg), ct);
+    }
+    
     public static void CreateDirectory(string path)
     {
         if (Directory.Exists(path))
@@ -194,10 +210,11 @@ public static class FileTransferUtils
         }
     }
 
-    public static void UploadPath(
+    public static async Task UploadPathAsync(
         string localPath,
         string remotePath,
-        Action<IMessage> sendMessageAction
+        Func<IMessage, CancellationToken, Task> sendMessageAction,
+        CancellationToken ct = default
     )
     {
         if (File.Exists(localPath))
@@ -205,32 +222,32 @@ public static class FileTransferUtils
             try
             {
                 // upload file in chunks to avoid massive buffering requirements
-                byte[] data = new byte[FILE_BUFFER_SIZE];
+                byte[] data = new byte[FileBufferSize];
                 ulong totalDataSize = (ulong)new FileInfo(localPath).Length; // cannot be negative
                 ulong currentOffset = 0;
-                using FileStream fileStream = File.OpenRead(localPath);
+                await using FileStream fileStream = File.OpenRead(localPath);
 
                 while (currentOffset < totalDataSize)
                 {
-                    int read = fileStream.Read(data);
+                    int read = await fileStream.ReadAsync(data, ct);
                     if (read == 0) break; // finished
                     currentOffset += (uint)read; // read also shouldn't be negative
 
                     byte[] slice = read < data.Length ? data[..read] : data;
 
-                    sendMessageAction(new DataMessage
+                    await sendMessageAction(new DataMessage
                     {
                         Path = remotePath,
                         Data = slice,
                         Crc32 = Crc32.HashToUInt32(slice),
-                    });
+                    }, ct);
                 }
 
-                sendMessageAction(new DataFinishedMessage { Path = remotePath });
+                await sendMessageAction(new DataFinishedMessage { Path = remotePath }, ct);
             }
             catch (Exception ex) when (ex is IOException)
             {
-                sendMessageAction(new ErrorRecoverableMessage { Errno = RecoverableError.ERRNO_IO_ERROR });
+                await sendMessageAction(new ErrorRecoverableMessage { Errno = RecoverableError.ERRNO_IO_ERROR }, ct);
             }
         }
         else if (Directory.Exists(localPath))
@@ -239,22 +256,32 @@ public static class FileTransferUtils
 
             // make the directory (doesn't error if already exists, but will error if there's a case
             // conflict)
-            sendMessageAction(new MakeDirMessage { Path = remotePath });
+            await sendMessageAction(new MakeDirMessage { Path = remotePath }, ct);
+
+            List<Task> inProgressUploads = [];
 
             // file includes full path + filename
-            foreach (string file in Directory.GetFiles(localPath))
+            await foreach (string file in AsyncFiles.EnumerateFilesAsync(localPath, cancellationToken: ct))
             {
                 // directly upload file (no further recursion after this)
-                UploadPath(file, Path.Combine(remotePath, Path.GetFileName(file)), sendMessageAction);
+                inProgressUploads.Add(
+                    UploadPathAsync(file, Path.Combine(remotePath, Path.GetFileName(file)), sendMessageAction, ct)
+                );
             }
 
+            await Task.WhenAll(inProgressUploads);
+            inProgressUploads.Clear();
+
             // dir includes full path + dir name
-            foreach (string dir in Directory.GetDirectories(localPath))
+            await foreach (string dir in AsyncFiles.EnumerateDirectoriesAsync(localPath, cancellationToken: ct))
             {
-                // recursively upload all directories - based on local & remote subdirectories of the current
-                // base
-                UploadPath(dir, Path.Combine(remotePath, Path.GetFileName(dir)), sendMessageAction);
+                // recursively upload all directories - based on local & remote subdirectories of the current base
+                inProgressUploads.Add(
+                    UploadPathAsync(dir, Path.Combine(remotePath, Path.GetFileName(dir)), sendMessageAction, ct)
+                );
             }
+
+            await Task.WhenAll(inProgressUploads);
         }
         else
         {
@@ -262,15 +289,24 @@ public static class FileTransferUtils
         }
     }
 
-    public static void ResendBlock(
-        ResendRequestMessage resend, Action<IMessage> sendMessageAction
+    public static Task ResendBlockAsync(
+        ResendRequestMessage resend, Func<IMessage, Task> sendMessageAction, CancellationToken ct = default
     )
     {
-        using FileStream tmpStream = File.Open(resend.Path, FileMode.Open, FileAccess.Read,
+        return ResendBlockAsync(resend, (msg, _) => sendMessageAction(msg), ct);
+    }
+
+    public static async Task ResendBlockAsync(
+        ResendRequestMessage resend,
+        Func<IMessage, CancellationToken, Task> sendMessageAction,
+        CancellationToken ct = default
+    )
+    {
+        await using FileStream tmpStream = File.Open(resend.Path, FileMode.Open, FileAccess.Read,
             FileShare.Read);
 
         tmpStream.Seek((long)resend.Offset, SeekOrigin.Begin);
-        byte[] buffer = new byte[FILE_BUFFER_SIZE];
+        byte[] buffer = new byte[FileBufferSize];
         int read = tmpStream.Read(buffer);
 
         DataMessage data = new()
@@ -279,6 +315,6 @@ public static class FileTransferUtils
             Data = buffer[..read],
         };
 
-        sendMessageAction(data);
+        await sendMessageAction(data, ct);
     }
 }

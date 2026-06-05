@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 using AdLib.Config;
 using AdLib.Identities;
@@ -21,6 +22,7 @@ namespace AdLib.ViewModel.Page;
 
 public partial class ServerViewModel : PageViewModel
 {
+
     public record struct ActiveTransfer
     {
         public required string ClientName;
@@ -41,7 +43,6 @@ public partial class ServerViewModel : PageViewModel
         }
     }
 
-    private readonly FileTransferServer _server = new();
     [ObservableProperty] private string _selectedCertificate = "";
     [ObservableProperty] private string _selectedPath = "";
     [ObservableProperty] private string _status = "Stopped";
@@ -54,8 +55,13 @@ public partial class ServerViewModel : PageViewModel
 
     [ObservableProperty] private double _transferProgress;
 
+    private readonly FileTransferServer _server = new();
+    private readonly Identity _identity;
+    private readonly TrustStore _trustStore;
+
     public ServerViewModel(Identity identity, string sharedFolder, char[] password)
     {
+        this._identity = identity;
         this.Status = "Listening";
         this.SelectedPath = sharedFolder;
         this.SelectedCertificate = identity.FriendlyName;
@@ -84,7 +90,7 @@ public partial class ServerViewModel : PageViewModel
                         // remove any transfers associated with this client
                         List<ActiveTransfer> toRemove =
                             this.CurrentTransfers
-                                .Where(t => t.ClientName == args.Client.Certificate.FriendlyName)
+                                .Where(t => t.ClientName == args.Client.PublicKeyInfo.FriendlyName)
                                 .ToList();
 
                         foreach (ActiveTransfer transfer in toRemove)
@@ -101,7 +107,7 @@ public partial class ServerViewModel : PageViewModel
             lock (this._transfersLock)
             {
                 ActiveTransfer transfer = this.CurrentTransfers.FirstOrDefault(
-                    t => t.ClientName == args.Client?.Certificate.FriendlyName,
+                    t => t.ClientName == args.Client?.PublicKeyInfo.FriendlyName,
                     default(ActiveTransfer) with { ClientName = null! }
                 );
 
@@ -115,7 +121,7 @@ public partial class ServerViewModel : PageViewModel
                 {
                     this.CurrentTransfers.Add(new ActiveTransfer
                     {
-                        ClientName = args.Client?.Certificate.FriendlyName ?? throw new InvalidOperationException(),
+                        ClientName = args.Client?.PublicKeyInfo.FriendlyName ?? throw new InvalidOperationException(),
                         IsUpload = args.IsSending,
                         Path = args.Path,
                     });
@@ -156,15 +162,14 @@ public partial class ServerViewModel : PageViewModel
         TrustStore localStore = new();
         globalStore.Load(ConfigDirectories.ServerGloballyTrustedIdentitiesPath, null);
         localStore.Load(localPath, password);
+        this._trustStore = localStore.Combine(globalStore);
 
         // server, so certificates shouldn't be associated with a host
-        if (localStore.TrustedHostCertificates.Any() || globalStore.TrustedHostCertificates.Any())
+        if (localStore.TrustedHostPublicKeys.Any() || globalStore.TrustedHostPublicKeys.Any())
         {
             throw new InvalidStoreException("Server's trusted certificate store must not contain any " +
                                             "certificates that are associated with a hostname");
         }
-
-        this._server.Start(identity, globalStore.Combine(localStore), sharedFolder);
     }
 
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
@@ -176,6 +181,8 @@ public partial class ServerViewModel : PageViewModel
         get => false;
         protected set { }
     }
+
+    public async Task Initialize() { await this._server.Start(this._identity, this._trustStore, this.SelectedPath); }
 
     [RelayCommand]
     private void PauseTransfer() { this.ChangePage(new ErrorViewModel("Not implemented")); }

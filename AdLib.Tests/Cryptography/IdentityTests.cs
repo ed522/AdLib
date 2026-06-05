@@ -8,7 +8,6 @@ namespace AdLib.Tests.Cryptography;
 public class IdentityTests
 {
     private const string IdentityName = "testing identity friendly name";
-    private const string InvalidIdentityName = "testing identity=friendly name";
 
     private static readonly char[] Password = "password".ToCharArray();
 
@@ -35,23 +34,12 @@ public class IdentityTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(identity.Cert, Is.Not.Null);
             Assert.That(identity.FriendlyName, Is.Not.Null);
             Assert.That(identity.InternalName, Is.Not.Default);
             Assert.That(identity.Keys, Is.Not.Null);
 
             Assert.That(identity.FriendlyName, Is.EqualTo(IdentityName));
-
-            Assert.That(
-                identity.Cert.SubjectName.Name
-                        .Split(",")
-                        .Where(s => s.StartsWith("CN="))
-                        .Select(s => s.Replace("CN=", ""))
-                        .First(),
-                Is.EqualTo(IdentityName)
-            );
-
-            Assert.That(identity.Cert.HasPrivateKey);
+            Assert.That(identity.Keys.HasPrivateKey);
         }
     }
 
@@ -62,32 +50,13 @@ public class IdentityTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(identity.Cert, Is.Not.Null);
             Assert.That(identity.FriendlyName, Is.Not.Null);
             Assert.That(identity.InternalName, Is.Not.Default);
             Assert.That(identity.Keys, Is.Not.Null);
 
             Assert.That(identity.FriendlyName, Is.EqualTo(IdentityName));
-
-            Assert.That(
-                identity.Cert.SubjectName.Name
-                        .Split(",")
-                        .Where(s => s.StartsWith("CN="))
-                        .Select(s => s.Replace("CN=", ""))
-                        .First(),
-                Is.EqualTo(IdentityName)
-            );
-
-            Assert.That(identity.Cert.HasPrivateKey);
+            Assert.That(identity.Keys.HasPrivateKey);
         }
-    }
-
-    [Test]
-    public void IdentityCreationWithEquals_Fails()
-    {
-        Assert.Throws<ArgumentException>(() =>
-            Identity.CreateNew(this._storeFolder, InvalidIdentityName, Password)
-        );
     }
 
     [Test]

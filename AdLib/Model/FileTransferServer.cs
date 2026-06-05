@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 
 using AdLib.Identities;
 using AdLib.IO;
+
+using Microsoft.DevTunnels.Ssh.Algorithms;
 
 namespace AdLib.Model;
 
@@ -64,7 +66,7 @@ public sealed partial class FileTransferServer : IDisposable
     /// </summary>
     public event SecureConnectionUtils.AuthenticationErrorHandler? AuthenticationError;
 
-    public void Start(Identity identity, TrustStore store, string sharedPath)
+    public async Task Start(Identity identity, TrustStore store, string sharedPath)
     {
         this._rootPath = Path.GetFullPath(sharedPath);
 
@@ -80,7 +82,7 @@ public sealed partial class FileTransferServer : IDisposable
         // define + start thread - since we hold a cancellation token we don't need to worry about keeping
         // references to stop it
         // ClientHandler is threaded so this can handle multiple at once
-        Thread listenerThread = new(() =>
+        Task listenerTask = Task.Run(async () =>
         {
             // keep accepting clients until the server is stopped
             while (!this._cancellationTokenSource.Token.IsCancellationRequested)
@@ -88,17 +90,25 @@ public sealed partial class FileTransferServer : IDisposable
                 try
                 {
                     // threaded so async is useless
-                    SecureConnectionUtils.ConnectionInfo connectionInfo =
-                        this._tlsServer.AcceptClientAsync().GetAwaiter().GetResult();
+                    SecureConnectionUtils.ConnectionInfo connectionInfo = await this._tlsServer.AcceptClientAsync();
 
                     // client disposes connection in its Dispose, and that's called on thread exit
                     SecureConnection? connection = connectionInfo.Connection;
 
                     string host = connectionInfo.Hostname;
-                    Certificate? cert = connectionInfo.Certificate;
-                    X509Certificate? presentedCert = connectionInfo.PresentedCert;
                     SecureConnectionUtils.ConnectionResult result = connectionInfo.Result;
                     SecureConnectionUtils.RejectionReason reason = connectionInfo.Reason;
+                    IKeyPair? publicKey = connectionInfo.PublicKey;
+                    PublicKeyInfo? publicKeyInfo;
+
+                    if (publicKey is not null)
+                    {
+                        publicKeyInfo = store.FindPublicKeyOrDefault(publicKey);
+                    }
+                    else
+                    {
+                        publicKeyInfo = null;
+                    }
 
                     // did the authentication fail?
                     // ConnectionResult holds the local auth result (against remote host), RejectionReason is
@@ -109,7 +119,7 @@ public sealed partial class FileTransferServer : IDisposable
                     {
                         // subscribers will handle both remote rejections (reason) and
                         // local rejections (result)
-                        this.AuthenticationError?.Invoke(host, cert, presentedCert, result, reason);
+                        this.AuthenticationError?.Invoke(host, publicKeyInfo, publicKey, result, reason);
                         continue;
                     }
 
@@ -123,11 +133,10 @@ public sealed partial class FileTransferServer : IDisposable
                     ClientInfo clientInfo = new()
                     {
                         RemoteEndPoint = host,
-                        Certificate = cert ??
-                                      throw new InvalidOperationException("Connection returned a null " +
-                                                                          "certificate even though " +
-                                                                          "authentication succeeded - " +
-                                                                          "this is a bug"),
+                        PublicKeyInfo = publicKeyInfo ??
+                                        throw new InvalidOperationException("Connection returned a null public key " +
+                                                                            "even though authentication succeeded - " +
+                                                                            "this is a bug"),
                     };
 
                     ClientHandler handler = new(clientInfo, connection, this._rootPath,
@@ -194,7 +203,7 @@ public sealed partial class FileTransferServer : IDisposable
 
                     this.ClientConnected?.Invoke(this, new ConnectedEventArgs { Client = clientInfo });
                     // client's partly connected so let the handler do its thing
-                    handler.Start();
+                    await handler.Start();
                 }
                 catch (Exception ex) when (ex is OperationCanceledException)
                 {
@@ -202,12 +211,9 @@ public sealed partial class FileTransferServer : IDisposable
                     return;
                 }
             }
-        })
-        {
-            IsBackground = true,
-        };
+        });
 
-        listenerThread.Start();
+        await listenerTask;
     }
 
     public void Stop()

@@ -51,7 +51,7 @@
                         <TextBlock Classes="info-extra" Margin="16,2,8,2">
                             <TextBlock.Text>
                                 <MultiBinding StringFormat="{}{0} ({1})">
-                                    <Binding Path="Certificate.FriendlyName" />
+                                    <Binding Path="PublicKeyInfo.FriendlyName" />
                                     <Binding Path="RemoteEndPoint" />
                                 </MultiBinding>
                             </TextBlock.Text>
