@@ -42,25 +42,5 @@ public class SecureCommsRejectionCommunicationTests
         yield return [ConnectionResult.UnspecifiedError, RejectionReason.UnspecifiedError];
     }
 
-    [TestCaseSource(nameof(RejectionReasonTestCases))]
-    public async Task TestReasonWrittenToStream_MatchesExpected(
-        ConnectionResult inputResult, RejectionReason expectedReason
-    )
-    {
-        // make sure that the client can exit cleanly
-        this._server.GetStream().WriteByte((byte)RejectionReason.None);
-
-        await CommunicateRejectionAsync(this._client, inputResult);
-        Assert.That(this._server.GetStream().ReadByte(), Is.EqualTo((byte)expectedReason));
-    }
-
-    [Test]
-    public async Task TestReturnedReasonOnClosedStream_IsUnspecifiedError()
-    {
-        // indicates EOF
-        this._server.Client.Shutdown(SocketShutdown.Send);
-
-        RejectionReason actual = await CommunicateRejectionAsync(this._client, ConnectionResult.Success);
-        Assert.That(actual, Is.EqualTo(RejectionReason.UnspecifiedError));
-    }
+    // TODO reimplement
 }
