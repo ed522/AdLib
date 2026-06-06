@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 
 using AdLib.Cryptography;
 
@@ -13,17 +12,13 @@ namespace AdLib.Identities;
 
 public class TrustStore
 {
+    
     private readonly Dictionary<string, HostPublicKeyInfo> _trustedHostKeys = [];
     private readonly List<PublicKeyInfo> _trustedKeys = [];
 
     public IEnumerable<string> KnownHosts => this._trustedHostKeys.Keys;
     public IEnumerable<HostPublicKeyInfo> TrustedHostPublicKeys => this._trustedHostKeys.Values;
     public IEnumerable<PublicKeyInfo> TrustedPublicKeys => this._trustedKeys.AsReadOnly();
-
-    public IEnumerable<IKeyPair> TrustedKeys =>
-        this._trustedKeys
-            .Select(k => k.PublicKey)
-            .Concat(this._trustedHostKeys.Values.Select(c => c.PublicKeyInfo.PublicKey));
 
     public IEnumerable<PublicKeyInfo> AllTrustedKeys =>
         this._trustedKeys.Concat(this._trustedHostKeys.Values.Select(c => c.PublicKeyInfo));
@@ -42,7 +37,7 @@ public class TrustStore
     {
         // search for all keys
         IEnumerable<string> files = Directory.EnumerateFiles(folder)
-                                             .Where(f => f.EndsWith(PublicKeyInfo.FILE_EXTENSION));
+                                             .Where(f => f.EndsWith(PublicKeyInfo.FileExtension));
 
         foreach (string file in files)
         {
@@ -88,7 +83,7 @@ public class TrustStore
     }
 
     private static string GetFileName(PublicKeyInfo key) =>
-        key.InternalName.ToString("D") + PublicKeyInfo.FILE_EXTENSION;
+        key.InternalName.ToString("D") + PublicKeyInfo.FileExtension;
 
     public bool IsPublicKeyValid(HostPublicKeyInfo key) =>
         this._trustedHostKeys.ContainsKey(key.Host) && key.Equals(this._trustedHostKeys[key.Host]);
@@ -100,23 +95,29 @@ public class TrustStore
             return false;
         }
 
-        byte[] fingerprint = publicKey.GetPublicKeyBytes().Array;
+        Span<byte> fingerprint = stackalloc byte[PublicKeyInfo.FingerprintLength];
+        PublicKeyInfo.GetCanonicalFingerprint(publicKey, fingerprint);
 
         return this._trustedHostKeys.ContainsKey(host) &&
-               this._trustedHostKeys[host].PublicKeyInfo.PublicKey.GetPublicKeyBytes()
-                   .SequenceEqual(fingerprint);
+               this._trustedHostKeys[host].PublicKeyInfo.PublicKeyFingerprint.AsSpan().SequenceEqual(fingerprint);
     }
 
     public bool IsKnown(string host) => this._trustedHostKeys.ContainsKey(host);
 
-    public HostPublicKeyInfo? GetKeyByHostOrDefault(string host, HostPublicKeyInfo? defaultVal = null) =>
+    public HostPublicKeyInfo? GetHostKeyByHostOrDefault(string host, HostPublicKeyInfo? defaultVal = null) =>
         this._trustedHostKeys.GetValueOrDefault(host) ?? defaultVal;
 
-    public PublicKeyInfo? GetKeyByThumbprintOrDefault(
-        byte[] thumbprint, HashAlgorithmName keyHash, PublicKeyInfo? defaultVal = null
-    ) => this.AllTrustedKeys
-             .Where(c => c.PublicKey.GetThumbprint(keyHash).SequenceEqual(thumbprint))
-             .FirstOrDefault(defaultVal);
+    public PublicKeyInfo? GetPlainKeyByFingerprintOrDefault(
+        Span<byte> fingerprint, PublicKeyInfo? defaultVal = null
+    )
+    {
+        foreach (PublicKeyInfo key in this._trustedKeys)
+        {
+            if (key.PublicKeyFingerprint.AsSpan().SequenceEqual(fingerprint)) return key;
+        }
+
+        return defaultVal;
+    }
 
     public void Trust(PublicKeyInfo key) => this._trustedKeys.Add(key);
     public void Trust(HostPublicKeyInfo key) => this._trustedHostKeys[key.Host] = key;
@@ -156,20 +157,40 @@ public class TrustStore
         return combined;
     }
 
-    public bool TryGetPublicKey(string host, [MaybeNullWhen(false)] out HostPublicKeyInfo publicKeyInfo) => this._trustedHostKeys.TryGetValue(host, out publicKeyInfo);
+    public bool TryGetPublicKey(string host, [MaybeNullWhen(false)] out HostPublicKeyInfo publicKeyInfo) =>
+        this._trustedHostKeys.TryGetValue(host, out publicKeyInfo);
 
     public PublicKeyInfo? FindPublicKeyOrDefault(IKeyPair keys, PublicKeyInfo? defaultValue = null)
     {
-        byte[] key = keys.GetPublicKeyBytes().Array;
+        Span<byte> fingerprint = stackalloc byte[PublicKeyInfo.FingerprintLength];
+        PublicKeyInfo.GetCanonicalFingerprint(keys, fingerprint);
 
-        return this.AllTrustedKeys.FirstOrDefault(k => k.PublicKey.GetPublicKeyBytes().SequenceEqual(key)) ??
-               defaultValue;
+        foreach (PublicKeyInfo testKey in this.AllTrustedKeys)
+        {
+            if (testKey.PublicKeyFingerprint.AsSpan().SequenceEqual(fingerprint))
+            {
+                return testKey;
+            }
+        }
+
+        return defaultValue;
     }
 
     public bool HasPlainKey(IKeyPair? publicKey)
     {
-        byte[]? key = publicKey?.GetPublicKeyBytes().Array;
-        if (key is null) return false;
-        return this._trustedKeys.Any(k => k.PublicKey.GetPublicKeyBytes().SequenceEqual(key));
+        if (publicKey is null) return false;
+
+        Span<byte> fingerprint = stackalloc byte[PublicKeyInfo.FingerprintLength];
+        PublicKeyInfo.GetCanonicalFingerprint(publicKey, fingerprint);
+
+        foreach (PublicKeyInfo testKey in this._trustedKeys)
+        {
+            if (testKey.PublicKeyFingerprint.AsSpan().SequenceEqual(fingerprint))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

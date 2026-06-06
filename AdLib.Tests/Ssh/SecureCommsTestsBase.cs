@@ -36,7 +36,7 @@ public class SecureCommsTestsBase
             Host = Host,
             PublicKeyInfo = new PublicKeyInfo
             {
-                PublicKey = this.ServerIdentity.Keys,
+                PublicKeyFingerprint = PublicKeyInfo.GetCanonicalFingerprint(this.ServerIdentity.Keys),
                 FriendlyName = this.ServerIdentity.FriendlyName,
                 InternalName = this.ServerIdentity.InternalName,
             },
@@ -44,7 +44,7 @@ public class SecureCommsTestsBase
 
         this._clientPublicKeyInfo = new PublicKeyInfo
         {
-            PublicKey = this.ClientIdentity.Keys,
+            PublicKeyFingerprint = PublicKeyInfo.GetCanonicalFingerprint(this.ClientIdentity.Keys),
             FriendlyName = this.ClientIdentity.FriendlyName,
             InternalName = this.ClientIdentity.InternalName,
         };

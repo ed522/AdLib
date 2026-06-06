@@ -123,15 +123,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
                 Assert.That(connectionToServer.Hostname, Is.EqualTo(Host));
                 Assert.That(connectionToServer.PublicKey, Is.Not.Null);
 
-                Assert.That(
-                    this.ClientTrustStore.AllTrustedKeys.Any(k => k.PublicKey
-                                                                   .GetPublicKeyBytes()
-                                                                   .SequenceEqual(connectionToServer.PublicKey
-                                                                                                    ?.GetPublicKeyBytes() ??
-                                                                                  [])
-                    ),
-                    Is.True
-                );
+                Assert.That(this.ClientTrustStore.IsKnown(Host), Is.True);
+                Assert.That(this.ClientTrustStore.IsPublicKeyValid(Host, connectionToServer.PublicKey), Is.True);
 
                 Assert.That(
                     connectionToServer.PublicKey?
@@ -155,7 +148,7 @@ public class SecureConnectionTests : SecureCommsTestsBase
         try
         {
             using Connections connections = await ConnectHosts(
-                this.ClientIdentity, this.ClientTrustStore,
+                this.ClientIdentity, new TrustStore(),
                 this.UntrustedServerIdentity, this.ServerTrustStore
             );
 
@@ -225,12 +218,7 @@ public class SecureConnectionTests : SecureCommsTestsBase
                 Assert.That(connectionToClient.PublicKey, Is.Not.Null);
 
                 Assert.That(
-                    this.ServerTrustStore.AllTrustedKeys.Any(k => k.PublicKey
-                                                                   .GetPublicKeyBytes()
-                                                                   .SequenceEqual(connectionToClient.PublicKey
-                                                                                                    ?.GetPublicKeyBytes() ??
-                                                                                  [])
-                    ),
+                    this.ServerTrustStore.HasPlainKey(connectionToClient.PublicKey),
                     Is.True
                 );
 

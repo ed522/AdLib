@@ -1,30 +1,21 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
-using Microsoft.DevTunnels.Ssh;
 using Microsoft.DevTunnels.Ssh.Algorithms;
 
 namespace AdLib.Identities;
 
-public record PublicKeyInfo
+public sealed class PublicKeyInfo
 {
-    public const string FILE_EXTENSION = ".adc";
+    public const string FileExtension = ".adc";
+    private static readonly HashAlgorithm HashAlgorithm = SHA256.Create();
+    public static int FingerprintLength => HashAlgorithm.HashSize / 8;
+
     public required Guid InternalName { get; init; }
     public required string FriendlyName { get; init; }
-
-    // weird conversion logic since the source generator will always crawl public types, even if they have a custom 
-    // converter, which means it tries to access a bunch of random obsolete fields
-    // workaround: encode it ourselves and hide the real cert
-    [JsonIgnore] public required IKeyPair PublicKey { get; init; }
-
-    [JsonInclude, JsonPropertyName(nameof(PublicKey))]
-    internal byte[] RawCertData
-    {
-        get => this.PublicKey.GetPublicKeyBytes().ToArray();
-        init => this.PublicKey = KeyPair.ImportKeyBytes(value);
-    }
+    public required byte[] PublicKeyFingerprint { get; init; }
 
     public static PublicKeyInfo LoadPublicKeyInfo(string path)
     {
@@ -38,4 +29,30 @@ public record PublicKeyInfo
 
     public byte[] SerializePublicKeyInfo() =>
         JsonSerializer.SerializeToUtf8Bytes(this, SourceGenerationContext.Default.PublicKeyInfo);
+
+    public static byte[] GetCanonicalFingerprint(IKeyPair key)
+    {
+        byte[] data = new byte[32];
+        GetCanonicalFingerprint(key, data);
+        return data;
+    }
+
+    public static void GetCanonicalFingerprint(IKeyPair key, Span<byte> output)
+    {
+        HashAlgorithm.TryComputeHash(key.GetPublicKeyBytes().Span, output, out _);
+    }
+
+    public bool Equals(PublicKeyInfo? other)
+    {
+        if (other is null) return false;
+
+        return this.InternalName == other.InternalName &&
+               this.FriendlyName == other.FriendlyName &&
+               this.PublicKeyFingerprint.AsSpan().SequenceEqual(other.PublicKeyFingerprint.AsSpan());
+    }
+
+    public override int GetHashCode() =>
+        HashCode.Combine(this.InternalName, this.FriendlyName, this.PublicKeyFingerprint);
+
+    public override string ToString() => $"{this.FriendlyName} [{this.InternalName}]";
 }
