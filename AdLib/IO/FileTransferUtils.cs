@@ -161,7 +161,8 @@ public static class FileTransferUtils
             // case-sensitively identical filenames, in which case we replace the contents
 
             if (File.Exists(data.Path) &&
-                !Directory.GetFiles(Path.GetFullPath(data.Path)).Any(f => f == data.Path))
+                !Directory.GetFiles(Path.GetDirectoryName(Path.GetFullPath(data.Path)) ?? "")
+                          .Any(f => f == data.Path))
             {
                 throw new InvalidPathException(InvalidPathException.InvalidPathReason.CaseConflict);
             }
