@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AdLib.IO;
 
@@ -29,7 +31,7 @@ public static class StreamIO
             // add value
             bits[i] = (byte)(value & 0x7F);
             count++;
-            
+
             // set MSB if there's more to come
             value >>= 7;
 
@@ -103,32 +105,6 @@ public static class StreamIO
 
     public static uint ReadVarInt(Stream stream) => checked((uint)ReadVarLong(stream));
 
-    public static void WriteString(Stream stream, string value)
-    {
-        byte[] bytes = Encoding.UTF8.GetBytes(value);
-        WriteVarInt(stream, (ulong)bytes.Length);
-        stream.Write(bytes, 0, bytes.Length);
-    }
-
-    public static string ReadString(Stream stream)
-    {
-        int length = (int)ReadVarInt(stream);
-        byte[] bytes = ReadBlock(stream, length);
-        return Encoding.UTF8.GetString(bytes);
-    }
-
-    public static void WriteBlock(Stream stream, ReadOnlySpan<byte> block)
-    {
-        stream.Write(BitConverter.GetBytes(block.Length), 0, 4);
-        stream.Write(block);
-    }
-
-    public static byte[] ReadBlock(Stream stream, int? length = null)
-    {
-        int actualLength = length ?? (int)BitConverter.ToUInt32(ReadFixed(stream, 4), 0);
-        return ReadFixed(stream, actualLength);
-    }
-
     public static void WriteFixed(Stream stream, byte[] data) => stream.Write(data, 0, data.Length);
 
     public static byte[] ReadFixed(Stream stream, int length)
@@ -156,4 +132,80 @@ public static class StreamIO
         stream.Write(BitConverter.GetBytes(value), 0, 4);
 
     public static uint ReadUInt32(Stream stream) => BitConverter.ToUInt32(ReadFixed(stream, 4), 0);
+
+    public static void WriteString(Stream stream, string value)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(value);
+        WriteVarInt(stream, (ulong)bytes.Length);
+        stream.Write(bytes, 0, bytes.Length);
+    }
+
+    public static string ReadString(Stream stream)
+    {
+        int length = (int)ReadVarInt(stream);
+        byte[] bytes = ReadBlock(stream, length);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    public static void WriteBlock(Stream stream, ReadOnlySpan<byte> block)
+    {
+        stream.Write(BitConverter.GetBytes(block.Length), 0, 4);
+        stream.Write(block);
+    }
+
+    public static byte[] ReadBlock(Stream stream, int? length = null)
+    {
+        int actualLength = length ?? (int)ReadUInt32(stream);
+        return ReadFixed(stream, actualLength);
+    }
+
+    public static async Task WriteFixedAsync(Stream stream, byte[] data, CancellationToken token = default)
+    {
+        await stream.WriteAsync(data.AsMemory(0, data.Length), token);
+    }
+
+    public static async Task<byte[]> ReadFixedAsync(Stream stream, int length, CancellationToken token = default)
+    {
+        Memory<byte> buffer = new(new byte[length]);
+        int totalRead = 0;
+
+        while (totalRead < length)
+        {
+            int read = await stream.ReadAsync(buffer.Slice(totalRead, length - totalRead), token);
+
+            if (read <= 0)
+            {
+                throw new EndOfStreamException(
+                    $"Insufficient data - expected {length} bytes, got {totalRead}");
+            }
+
+            totalRead += read;
+        }
+
+        return buffer.ToArray();
+    }
+
+    public static async Task WriteUInt32Async(Stream stream, uint value, CancellationToken token = default)
+    {
+        await stream.WriteAsync(BitConverter.GetBytes(value).AsMemory(0, 4), token);
+    }
+
+    public static async Task<uint> ReadUInt32Async(Stream stream, CancellationToken token = default) =>
+        BitConverter.ToUInt32(await ReadFixedAsync(stream, 4, token), 0);
+
+    public static async Task WriteBlockAsync(
+        Stream stream, ReadOnlyMemory<byte> block, CancellationToken token = default
+    )
+    {
+        await stream.WriteAsync(BitConverter.GetBytes(block.Length).AsMemory(0, 4), token);
+        await stream.WriteAsync(block, token);
+    }
+
+    public static async Task<byte[]> ReadBlockAsync(
+        Stream stream, int? length = null, CancellationToken token = default
+    )
+    {
+        int actualLength = length ?? (int)await ReadUInt32Async(stream, token);
+        return await ReadFixedAsync(stream, actualLength, token);
+    }
 }
