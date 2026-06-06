@@ -76,6 +76,45 @@ public static class FileTransferUtils
         stream.Flush();
     }
 
+    public static uint BufferMessage(
+        uint expectedSize, byte[] buffer, MemoryStream inProgressBuffer, out IMessage? possibleMessage
+    )
+    {
+        using MemoryStream stream = new(buffer);
+
+        // _currentExpectedSize == 0 when no buffering operation is in progress
+        if (expectedSize == 0)
+        {
+            expectedSize = StreamIO.ReadUInt32(stream);
+
+            // is the entire message in this packet?
+            if (stream.Length == expectedSize + sizeof(uint))
+            {
+                // read it all at once - a copy is unnecessary
+                possibleMessage = ReadMessage(stream);
+                return 0;
+            }
+            // else: there's not enough data here - start a buffered operation
+        }
+
+        // only reachable on buffered operation
+        stream.CopyTo(inProgressBuffer);
+
+        // is there a buffered message that has been completely satisfied?
+        if (expectedSize != 0 && inProgressBuffer.Length >= expectedSize)
+        {
+            // deserialize and reset
+            inProgressBuffer.Position = 0;
+            possibleMessage = ReadMessage(inProgressBuffer);
+            inProgressBuffer.SetLength(0);
+            return 0;
+        }
+
+        // else: continue buffering
+        possibleMessage = null;
+        return expectedSize;
+    }
+
     /// <summary>
     ///     Processes a chunk of an in-progress download, writing it to a temporary <c>.[random].part</c>
     ///     file to avoid corrupting the file if the connection is lost. If the message is the first

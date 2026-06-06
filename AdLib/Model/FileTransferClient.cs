@@ -25,6 +25,9 @@ public sealed class FileTransferClient : IDisposable
     private readonly ConcurrentQueue<ClientRequest> _requests = new();
     private readonly ConcurrentQueue<IMessage> _messages = new();
 
+    private readonly MemoryStream _partialBuffer = new();
+    private uint _currentExpectedSize;
+
     private string _latestDownload = "";
     private SecureClient? _secureClient;
     public bool IsConnected { get; private set; }
@@ -118,10 +121,21 @@ public sealed class FileTransferClient : IDisposable
 
                 connection.Channel.DataReceived += (_, args) =>
                 {
-                    using MemoryStream stream = new(args.Array);
-                    IMessage message = FileTransferUtils.ReadMessage(stream);
-                    this._messages.Enqueue(message);
-                    this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
+                    this._currentExpectedSize = FileTransferUtils.BufferMessage(
+                        this._currentExpectedSize,
+                        args.Array,
+                        this._partialBuffer,
+                        out IMessage? message
+                    );
+
+                    connection.Channel.AdjustWindow((uint)args.Array.Length);
+
+                    // not null on complete message, null while buffering
+                    if (message is not null)
+                    {
+                        this._messages.Enqueue(message);
+                        this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
+                    }
                 };
 
                 // allows thread to continue accepting requests
@@ -204,7 +218,16 @@ public sealed class FileTransferClient : IDisposable
         try
         {
             MemoryStream stream = new();
+
+            // skip the size, write out the message, then go back to write the real size
+            // (means no extra copy)
+            stream.Seek(sizeof(uint), SeekOrigin.Begin);
             FileTransferUtils.SendMessage(stream, message);
+            uint size = (uint)stream.Length - sizeof(uint);
+
+            stream.Seek(0, SeekOrigin.Begin);
+            await StreamIO.WriteUInt32Async(stream, size, ct);
+            
             await this._secureClient.Channel.SendAsync(stream.ToArray(), ct);
         }
         catch (Exception ex)

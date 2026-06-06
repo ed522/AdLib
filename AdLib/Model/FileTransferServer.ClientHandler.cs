@@ -19,6 +19,8 @@ public sealed partial class FileTransferServer
         private readonly Random _random = new();
         private readonly SemaphoreSlim _communicationHandle = new(0);
         private readonly Queue<IMessage> _messages = new();
+        private uint _currentExpectedSize;
+        private readonly MemoryStream _partialBuffer = new();
 
         private readonly CancellationToken _cancellationToken;
 
@@ -76,10 +78,21 @@ public sealed partial class FileTransferServer
             {
                 this._connection.Channel.DataReceived += (_, args) =>
                 {
-                    using MemoryStream stream = new(args.Array);
-                    IMessage message = FileTransferUtils.ReadMessage(stream);
-                    this._messages.Enqueue(message);
-                    this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
+                    this._currentExpectedSize = FileTransferUtils.BufferMessage(
+                        this._currentExpectedSize,
+                        args.Array,
+                        this._partialBuffer,
+                        out IMessage? message
+                    );
+
+                    this._connection.Channel.AdjustWindow((uint)args.Array.Length);
+
+                    // not null on complete message, null while buffering
+                    if (message is not null)
+                    {
+                        this._messages.Enqueue(message);
+                        this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
+                    }
                 };
 
                 // allows thread to continue accepting messages once one comes in
@@ -304,8 +317,17 @@ public sealed partial class FileTransferServer
 
         private async Task SendMessage(IMessage message, CancellationToken ct = default)
         {
-            using MemoryStream stream = new();
+            MemoryStream stream = new();
+
+            // skip the size, write out the message, then go back to write the real size
+            // (means no extra copy)
+            stream.Seek(sizeof(uint), SeekOrigin.Begin);
             FileTransferUtils.SendMessage(stream, message);
+            uint size = (uint)stream.Length - sizeof(uint);
+
+            stream.Seek(0, SeekOrigin.Begin);
+            await StreamIO.WriteUInt32Async(stream, size, ct);
+            
             await this._connection.Channel.SendAsync(stream.ToArray(), ct);
         }
 
