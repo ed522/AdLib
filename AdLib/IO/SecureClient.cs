@@ -9,6 +9,7 @@ using AdLib.Identities;
 
 using Microsoft.DevTunnels.Ssh;
 using Microsoft.DevTunnels.Ssh.Algorithms;
+using Microsoft.DevTunnels.Ssh.Events;
 
 using static AdLib.IO.SecureConnectionUtils;
 
@@ -128,5 +129,38 @@ public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : I
             PublicKey = pair,
             PublicKeyFingerprint = remoteFingerprint,
         };
+    }
+
+    internal static ClaimsPrincipal? ClientValidateRemote(
+        string host, IKeyPair? publicKey, SshAuthenticationType type, TrustStore trustedCerts,
+        out ConnectionResult result
+    )
+    {
+        result = ConnectionResult.UnspecifiedError;
+
+        // assert proper method
+        if (type != SshAuthenticationType.ServerPublicKey)
+        {
+            result = ConnectionResult.InvalidMethod;
+            return null;
+        }
+
+        // check public key hostname
+        if (!trustedCerts.IsKnown(host))
+        {
+            result = ConnectionResult.UnknownHostOrKey;
+            return null;
+        }
+
+        if (!trustedCerts.IsPublicKeyValid(host, publicKey))
+        {
+            result = ConnectionResult.MismatchedPublicKey;
+            return null;
+        }
+
+        // all checks successful
+        result = ConnectionResult.Success;
+        ClaimsIdentity claimsIdentity = new([new Claim(ClaimTypes.Name, host)], "SSH2");
+        return new ClaimsPrincipal(claimsIdentity);
     }
 }

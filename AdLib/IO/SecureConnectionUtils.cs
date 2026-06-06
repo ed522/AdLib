@@ -44,65 +44,6 @@ public static class SecureConnectionUtils
     public const ushort Port = 7477;
     public const ushort RecoveryPort = 7478;
 
-    public static ClaimsPrincipal? ServerValidateRemote(
-        string? host, IKeyPair? publicKey, SshAuthenticationType type, TrustStore trustedCerts,
-        out ConnectionResult result
-    )
-    {
-        result = ConnectionResult.UnspecifiedError;
-
-        // assert proper method
-        if (type != SshAuthenticationType.ClientPublicKey)
-        {
-            result = ConnectionResult.InvalidMethod;
-            return null;
-        }
-
-        // check if key is known - no host check
-        if (!trustedCerts.HasPlainKey(publicKey))
-        {
-            result = ConnectionResult.UnknownHostOrKey;
-            return null;
-        }
-
-        // all checks successful
-        result = ConnectionResult.Success;
-        return new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, host ?? "")], "SSH2"));
-    }
-
-    public static ClaimsPrincipal? ClientValidateRemote(
-        string host, IKeyPair? publicKey, SshAuthenticationType type, TrustStore trustedCerts,
-        out ConnectionResult result
-    )
-    {
-        result = ConnectionResult.UnspecifiedError;
-
-        // assert proper method
-        if (type != SshAuthenticationType.ServerPublicKey)
-        {
-            result = ConnectionResult.InvalidMethod;
-            return null;
-        }
-
-        // check public key hostname
-        if (!trustedCerts.IsKnown(host))
-        {
-            result = ConnectionResult.UnknownHostOrKey;
-            return null;
-        }
-
-        if (!trustedCerts.IsPublicKeyValid(host, publicKey))
-        {
-            result = ConnectionResult.MismatchedPublicKey;
-            return null;
-        }
-
-        // all checks successful
-        result = ConnectionResult.Success;
-        ClaimsIdentity claimsIdentity = new([new Claim(ClaimTypes.Name, host)], "SSH2");
-        return new ClaimsPrincipal(claimsIdentity);
-    }
-
     public struct PreAuthInfo
     {
         public required RejectionReason RejectionReason { get; init; }

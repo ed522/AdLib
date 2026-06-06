@@ -1,5 +1,7 @@
 using System.Security.Claims;
 
+using AdLib.IO;
+
 using Microsoft.DevTunnels.Ssh.Events;
 
 using static AdLib.IO.SecureConnectionUtils;
@@ -13,7 +15,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnClientTrustedPublicKey_ReturnsTrue_Success()
     {
-        ClaimsPrincipal? value = ClientValidateRemote(
+        ClaimsPrincipal? value = SecureClient.ClientValidateRemote(
             Host, this.ServerIdentity.Keys, SshAuthenticationType.ServerPublicKey,
             this.ClientTrustStore, out ConnectionResult status
         );
@@ -28,7 +30,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnClientIncorrectPublicKey_ReturnsFalse_MismatchedPublicKey()
     {
-        ClaimsPrincipal? value = ClientValidateRemote(
+        ClaimsPrincipal? value = SecureClient.ClientValidateRemote(
             Host, this.UntrustedServerIdentity.Keys, SshAuthenticationType.ServerPublicKey,
             this.ClientTrustStore, out ConnectionResult status
         );
@@ -43,7 +45,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnClientUnknownHost_ReturnsFalse_UnknownHost()
     {
-        ClaimsPrincipal? value = ClientValidateRemote(
+        ClaimsPrincipal? value = SecureClient.ClientValidateRemote(
             UnknownHost, this.ServerIdentity.Keys, SshAuthenticationType.ServerPublicKey,
             this.ClientTrustStore, out ConnectionResult status
         );
@@ -58,7 +60,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnClientInvalidMethod_ReturnsFalse_InvalidMethod()
     {
-        ClaimsPrincipal? value = ClientValidateRemote(
+        ClaimsPrincipal? value = SecureClient.ClientValidateRemote(
             Host, this.ServerIdentity.Keys, SshAuthenticationType.ClientPublicKeyQuery,
             this.ClientTrustStore, out ConnectionResult status
         );
@@ -73,7 +75,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnServerTrustedPublicKey_ReturnsTrue_Success()
     {
-        ClaimsPrincipal? value = ServerValidateRemote(
+        ClaimsPrincipal? value = SecureServer.ServerValidateRemote(
             Host, this.ClientIdentity.Keys, SshAuthenticationType.ClientPublicKey,
             this.ServerTrustStore, out ConnectionResult status
         );
@@ -88,7 +90,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnServerUnknownPublicKey_ReturnsFalse_UnknownHost()
     {
-        ClaimsPrincipal? value = ServerValidateRemote(
+        ClaimsPrincipal? value = SecureServer.ServerValidateRemote(
             Host, this.UntrustedClientIdentity.Keys, SshAuthenticationType.ClientPublicKey,
             this.ServerTrustStore, out ConnectionResult status
         );
@@ -104,7 +106,7 @@ public class SecureCommsValidationTests : SecureCommsTestsBase
     [Test]
     public void TestResultOnServerInvalidMethod_ReturnsFalse_InvalidMethod()
     {
-        ClaimsPrincipal? value = ClientValidateRemote(
+        ClaimsPrincipal? value = SecureClient.ClientValidateRemote(
             Host, this.ServerIdentity.Keys, SshAuthenticationType.ClientHostBased,
             this.ClientTrustStore, out ConnectionResult status
         );
