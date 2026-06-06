@@ -36,9 +36,9 @@ public class SecureCommsRejectionCommunicationTests
     {
         yield return [ConnectionResult.DidNotAttempt, RejectionReason.UnspecifiedError];
         yield return [ConnectionResult.Success, RejectionReason.None];
-        yield return [ConnectionResult.BadCertificate, RejectionReason.BadCertificate];
-        yield return [ConnectionResult.UntrustedCertificate, RejectionReason.UntrustedCertificate];
-        yield return [ConnectionResult.MismatchedCertificate, RejectionReason.MismatchedCertificate];
+        yield return [ConnectionResult.BadPublicKey, RejectionReason.BadPublicKey];
+        yield return [ConnectionResult.UnknownHostOrKey, RejectionReason.UnknownHostOrKey];
+        yield return [ConnectionResult.MismatchedPublicKey, RejectionReason.MismatchedPublicKey];
         yield return [ConnectionResult.UnspecifiedError, RejectionReason.UnspecifiedError];
     }
 

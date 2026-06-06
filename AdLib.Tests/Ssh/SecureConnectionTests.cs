@@ -157,9 +157,9 @@ public class SecureConnectionTests : SecureCommsTestsBase
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(connectionToServer.Hostname, Is.EqualTo(Host));
-                Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.UntrustedCertificate));
+                Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
                 Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.None));
-                Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.UntrustedCertificate));
+                Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
                 Assert.That(connectionToServer.PublicKey, Is.Not.Null);
                 Assert.That(connectionToServer.Connection, Is.Null);
             }
@@ -252,9 +252,9 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
             using (Assert.EnterMultipleScope())
             {
-                Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.UntrustedCertificate));
+                Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
                 Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.None));
-                Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.UntrustedCertificate));
+                Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
                 Assert.That(connectionToClient.PublicKey, Is.Not.Null);
                 Assert.That(connectionToClient.Connection, Is.Null);
             }
@@ -282,10 +282,10 @@ public class SecureConnectionTests : SecureCommsTestsBase
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(connectionToServer.Hostname, Is.EqualTo(Host));
-                Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.UntrustedCertificate));
-                Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.UntrustedCertificate));
-                Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.UntrustedCertificate));
-                Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.UntrustedCertificate));
+                Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
+                Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
+                Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
+                Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
                 Assert.That(connectionToClient.PublicKey, Is.Not.Null);
             }
         }

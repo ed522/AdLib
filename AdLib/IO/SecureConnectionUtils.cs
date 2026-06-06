@@ -22,9 +22,9 @@ public static class SecureConnectionUtils
     {
         DidNotAttempt = 0,
         Success = 0x01,
-        BadCertificate = 0x10,
-        UntrustedCertificate = 0x11,
-        MismatchedCertificate = 0x12,
+        BadPublicKey = 0x10,
+        UnknownHostOrKey = 0x11,
+        MismatchedPublicKey = 0x12,
         InvalidMethod = 0x20,
         UnspecifiedError = 0xFF,
     }
@@ -32,9 +32,9 @@ public static class SecureConnectionUtils
     public enum RejectionReason : byte
     {
         None = 0x00,
-        UntrustedCertificate = 0x10,
-        MismatchedCertificate = 0x11,
-        BadCertificate = 0x12,
+        UnknownHostOrKey = 0x10,
+        MismatchedPublicKey = 0x11,
+        BadPublicKey = 0x12,
         InvalidMethod = 0x20,
         CouldNotGetReason = 0xFE,
         UnspecifiedError = 0xFF,
@@ -60,13 +60,13 @@ public static class SecureConnectionUtils
         // check if key is known - no host check
         if (!trustedCerts.HasPlainKey(publicKey))
         {
-            result = ConnectionResult.UntrustedCertificate;
+            result = ConnectionResult.UnknownHostOrKey;
             return null;
         }
 
         // all checks successful
         result = ConnectionResult.Success;
-        return new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, host ?? "")]));
+        return new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, host ?? "")], "SSH2"));
     }
 
     public static ClaimsPrincipal? ClientValidateRemote(
@@ -86,13 +86,13 @@ public static class SecureConnectionUtils
         // check public key hostname
         if (!trustedCerts.IsKnown(host))
         {
-            result = ConnectionResult.UntrustedCertificate;
+            result = ConnectionResult.UnknownHostOrKey;
             return null;
         }
 
         if (!trustedCerts.IsPublicKeyValid(host, publicKey))
         {
-            result = ConnectionResult.MismatchedCertificate;
+            result = ConnectionResult.MismatchedPublicKey;
             return null;
         }
 
@@ -121,9 +121,9 @@ public static class SecureConnectionUtils
                 (byte)(result switch
                 {
                     ConnectionResult.UnspecifiedError => RejectionReason.UnspecifiedError,
-                    ConnectionResult.BadCertificate => RejectionReason.BadCertificate,
-                    ConnectionResult.MismatchedCertificate => RejectionReason.MismatchedCertificate,
-                    ConnectionResult.UntrustedCertificate => RejectionReason.UntrustedCertificate,
+                    ConnectionResult.BadPublicKey => RejectionReason.BadPublicKey,
+                    ConnectionResult.MismatchedPublicKey => RejectionReason.MismatchedPublicKey,
+                    ConnectionResult.UnknownHostOrKey => RejectionReason.UnknownHostOrKey,
                     ConnectionResult.InvalidMethod => RejectionReason.InvalidMethod,
                     ConnectionResult.Success => RejectionReason.None,
                     _ => RejectionReason.UnspecifiedError,
