@@ -8,41 +8,6 @@ namespace AdLib.Tests.Ssh;
 [NonParallelizable]
 public class SecureConnectionTests : SecureCommsTestsBase
 {
-    private readonly struct Connections : IDisposable
-    {
-        public required ConnectionInfo ConnectionToServer { get; init; }
-        public required ConnectionInfo ConnectionToClient { get; init; }
-
-        public required SecureClient SecureClient
-        {
-            init => this._secureClient = value;
-        }
-
-        public required SecureServer SecureServer
-        {
-            init => this._secureServer = value;
-        }
-
-        private readonly SecureClient _secureClient;
-        private readonly SecureServer _secureServer;
-
-        public void Dispose()
-        {
-            this.ConnectionToServer.Connection?.Dispose();
-            this.ConnectionToClient.Connection?.Dispose();
-            this._secureClient.Dispose();
-            this._secureServer.Dispose();
-        }
-
-        public void Deconstruct(
-            out ConnectionInfo connectionToClient, out ConnectionInfo connectionToServer
-        )
-        {
-            connectionToClient = this.ConnectionToClient;
-            connectionToServer = this.ConnectionToServer;
-        }
-    }
-
     private readonly SemaphoreSlim _addressBindSemaphore = new(1, 1);
 
     private static async Task<Connections> ConnectHosts(
@@ -93,6 +58,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
             {
                 Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.Success));
                 Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.None));
+                Assert.That(connectionToServer.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToServer.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
                 Assert.That(connectionToServer.PublicKey, Is.Not.Null);
                 Assert.That(connectionToServer.Connection, Is.Not.Null);
                 Assert.That(connectionToServer.Hostname, Is.Not.Null);
@@ -121,6 +88,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(connectionToServer.Hostname, Is.EqualTo(Host));
+                Assert.That(connectionToServer.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToServer.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
                 Assert.That(connectionToServer.PublicKey, Is.Not.Null);
 
                 Assert.That(this.ClientTrustStore.IsKnown(Host), Is.True);
@@ -160,7 +129,39 @@ public class SecureConnectionTests : SecureCommsTestsBase
                 Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
                 Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.None));
                 Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
-                Assert.That(connectionToServer.PublicKey, Is.Not.Null);
+                Assert.That(connectionToServer.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToServer.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
+                Assert.That(connectionToServer.Connection, Is.Null);
+            }
+        }
+        finally
+        {
+            this._addressBindSemaphore.Release();
+        }
+    }
+
+    [Test]
+    public async Task TestClientConnectWithMismatchedServerCertificate_Fails()
+    {
+        await this._addressBindSemaphore.WaitAsync();
+
+        try
+        {
+            using Connections connections = await ConnectHosts(
+                this.ClientIdentity, this.ClientTrustStore,
+                this.UntrustedServerIdentity, this.ServerTrustStore
+            );
+
+            (ConnectionInfo connectionToClient, ConnectionInfo connectionToServer) = connections;
+
+            using (Assert.EnterMultipleScope())
+            {
+                Assert.That(connectionToServer.Hostname, Is.EqualTo(Host));
+                Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.MismatchedPublicKey));
+                Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.None));
+                Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.MismatchedPublicKey));
+                Assert.That(connectionToServer.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToServer.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
                 Assert.That(connectionToServer.Connection, Is.Null);
             }
         }
@@ -189,6 +190,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
                 Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.Success));
                 Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.None));
                 Assert.That(connectionToClient.Connection, Is.Not.Null);
+                Assert.That(connectionToClient.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToClient.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
                 Assert.That(connectionToClient.PublicKey, Is.Not.Null);
             }
         }
@@ -215,6 +218,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(connectionToClient.Hostname, Is.EqualTo(Host));
+                Assert.That(connectionToClient.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToClient.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
                 Assert.That(connectionToClient.PublicKey, Is.Not.Null);
 
                 Assert.That(
@@ -224,8 +229,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
                 Assert.That(
                     connectionToClient.PublicKey?
-                                      .GetPublicKeyBytes()
-                                      .SequenceEqual(this.ServerIdentity.Keys.GetPublicKeyBytes()),
+                                      .GetPublicKeyBytes().Span
+                                      .SequenceEqual(this.ClientIdentity.Keys.GetPublicKeyBytes().Span),
                     Is.True
                 );
             }
@@ -255,7 +260,8 @@ public class SecureConnectionTests : SecureCommsTestsBase
                 Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
                 Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.None));
                 Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
-                Assert.That(connectionToClient.PublicKey, Is.Not.Null);
+                Assert.That(connectionToClient.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToClient.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
                 Assert.That(connectionToClient.Connection, Is.Null);
             }
         }
@@ -272,8 +278,9 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
+            // cannot reuse trust store since it gives the wrong error
             using Connections connections = await ConnectHosts(
-                this.UntrustedClientIdentity, this.ClientTrustStore,
+                this.UntrustedClientIdentity, new TrustStore(),
                 this.UntrustedServerIdentity, this.ServerTrustStore
             );
 
@@ -282,16 +289,56 @@ public class SecureConnectionTests : SecureCommsTestsBase
             using (Assert.EnterMultipleScope())
             {
                 Assert.That(connectionToServer.Hostname, Is.EqualTo(Host));
+
                 Assert.That(connectionToClient.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
                 Assert.That(connectionToClient.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
                 Assert.That(connectionToServer.Result, Is.EqualTo(ConnectionResult.UnknownHostOrKey));
                 Assert.That(connectionToServer.Reason, Is.EqualTo(RejectionReason.UnknownHostOrKey));
-                Assert.That(connectionToClient.PublicKey, Is.Not.Null);
+
+                Assert.That(connectionToClient.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToClient.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
+                Assert.That(connectionToServer.PublicKeyFingerprint, Is.Not.Null);
+                Assert.That(connectionToServer.PublicKeyFingerprint, Has.No.Length.EqualTo(0));
             }
         }
         finally
         {
             this._addressBindSemaphore.Release();
+        }
+    }
+
+    private readonly struct Connections : IDisposable
+    {
+        public required ConnectionInfo ConnectionToServer { get; init; }
+        public required ConnectionInfo ConnectionToClient { get; init; }
+
+        public required SecureClient SecureClient
+        {
+            init => this._secureClient = value;
+        }
+
+        public required SecureServer SecureServer
+        {
+            init => this._secureServer = value;
+        }
+
+        private readonly SecureClient _secureClient;
+        private readonly SecureServer _secureServer;
+
+        public void Dispose()
+        {
+            this.ConnectionToServer.Connection?.Dispose();
+            this.ConnectionToClient.Connection?.Dispose();
+            this._secureClient.Dispose();
+            this._secureServer.Dispose();
+        }
+
+        public void Deconstruct(
+            out ConnectionInfo connectionToClient, out ConnectionInfo connectionToServer
+        )
+        {
+            connectionToClient = this.ConnectionToClient;
+            connectionToServer = this.ConnectionToServer;
         }
     }
 }
