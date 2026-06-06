@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Net.Sockets;
 using System.Security.Claims;
@@ -98,7 +99,14 @@ public static class SecureConnectionUtils
 
         // all checks successful
         result = ConnectionResult.Success;
-        return new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, host)]));
+        ClaimsIdentity claimsIdentity = new([new Claim(ClaimTypes.Name, host)], "SSH2");
+        return new ClaimsPrincipal(claimsIdentity);
+    }
+
+    public struct PreAuthInfo
+    {
+        public required RejectionReason RejectionReason { get; init; }
+        public required byte[]? PublicKeyFingerprint { get; init; }
     }
 
     /// <summary>
@@ -107,18 +115,27 @@ public static class SecureConnectionUtils
     ///     reason provided by the remote host (both if applicable).
     /// </summary>
     /// <param name="client">the client to communicate over</param>
-    /// <param name="result">the result of authentication on this host</param>
+    /// <param name="publicKeyFingerprint">the current host's public key fingerprint</param>
+    /// <param name="preCheckAction">
+    ///     an action that checks a given fingerprint, possibly prematurely ending the negotiation process
+    /// </param>
     /// <param name="ct">the token to cancel this asynchronous operation</param>
     /// <returns></returns>
-    public static async Task<RejectionReason> CommunicateRejectionAsync(
-        TcpClient client, ConnectionResult result, CancellationToken ct = default
+    public static async Task<PreAuthInfo> ExchangePreAuthInfoAsync(
+        TcpClient client, byte[] publicKeyFingerprint, Func<byte[], ConnectionResult> preCheckAction,
+        CancellationToken ct = default
     )
     {
         try
         {
+            await StreamIO.WriteBlockAsync(client.GetStream(), publicKeyFingerprint, ct);
+            byte[] otherFingerprint = await StreamIO.ReadBlockAsync(client.GetStream(), token: ct);
+
+            ConnectionResult preAuthResult = preCheckAction.Invoke(otherFingerprint);
+
             await client.GetStream().WriteAsync(new[]
             {
-                (byte)(result switch
+                (byte)(preAuthResult switch
                 {
                     ConnectionResult.UnspecifiedError => RejectionReason.UnspecifiedError,
                     ConnectionResult.BadPublicKey => RejectionReason.BadPublicKey,
@@ -137,14 +154,26 @@ public static class SecureConnectionUtils
             // make sure stream isn't closed yet
             if (processed > 0)
             {
-                return (RejectionReason)reason[0];
+                return new PreAuthInfo
+                {
+                    RejectionReason = (RejectionReason)reason[0],
+                    PublicKeyFingerprint = otherFingerprint,
+                };
             }
 
-            return RejectionReason.CouldNotGetReason;
+            return new PreAuthInfo
+            {
+                RejectionReason = RejectionReason.CouldNotGetReason,
+                PublicKeyFingerprint = null,
+            };
         }
         catch (IOException)
         {
-            return RejectionReason.CouldNotGetReason;
+            return new PreAuthInfo
+            {
+                RejectionReason = RejectionReason.CouldNotGetReason,
+                PublicKeyFingerprint = null,
+            };
         }
     }
 
@@ -155,5 +184,6 @@ public static class SecureConnectionUtils
         public required string Hostname;
         public required SecureConnection? Connection;
         public required IKeyPair? PublicKey;
+        public required byte[]? PublicKeyFingerprint;
     }
 }

@@ -16,13 +16,19 @@ namespace AdLib.IO;
 
 public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : IDisposable
 {
-    private const int RecoveryTimeout = 10;
-
     private SecureConnection? _connection;
 
     public SshChannel? Channel => this._connection?.Channel;
 
     public void Dispose() { this._connection?.Dispose(); }
+
+    private ConnectionResult ValidatePreAuthRemote(string host, byte[] fingerprint)
+    {
+        if (!trustedCerts.IsKnown(host)) return ConnectionResult.UnknownHostOrKey;
+        if (!trustedCerts.IsFingerprintValid(host, fingerprint)) return ConnectionResult.MismatchedPublicKey;
+        // NOTE: this does not mean that they are authenticated, just that authentication can proceed
+        return ConnectionResult.Success;
+    }
 
     public async Task<ConnectionInfo> ConnectAsync(string host, CancellationToken ct = default)
     {
@@ -32,56 +38,83 @@ public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : I
         ConnectionResult result = ConnectionResult.DidNotAttempt;
         RejectionReason reason = RejectionReason.None;
 
-        SshSessionConfiguration config = new();
-        SshClientCredentials clientCreds = new(identity.InternalName.ToString(), identity.Keys);
-
-        SshClientSession session = new(config, new TraceSource("AdLib_SshClient"));
+        // cooperative authentication over raw tcp first
+        // does not influence actual security decisions, but guarantees that both parties can see each other's keys
+        // if someone gives a fake key, it fails at SSH auth with possibly unspecified error messages
+        bool needsToClose = false;
+        byte[] remoteFingerprint = [];
         TaskCompletionSource<IKeyPair?> keyTask = new();
 
-        await session.ConnectAsync(tcpClient.GetStream(), ct);
-
-        session.Authenticating += (_, args) =>
+        try
         {
-            ClaimsPrincipal? value = ClientValidateRemote(
-                host, args.PublicKey, args.AuthenticationType, trustedCerts, out result
+            PreAuthInfo info = await ExchangePreAuthInfoAsync(
+                tcpClient,
+                PublicKeyInfo.GetCanonicalFingerprint(identity.Keys),
+                fingerprint =>
+                {
+                    remoteFingerprint = fingerprint[..];
+                    // preemptive result - overriden if the pre-auth succeeds
+                    result = this.ValidatePreAuthRemote(host, fingerprint);
+                    return result;
+                },
+                ct
             );
 
-            keyTask.SetResult(args.PublicKey);
-            args.AuthenticationTask = Task.FromResult(value);
-        };
+            if (info.RejectionReason != RejectionReason.None || result != ConnectionResult.Success)
+            {
+                reason = info.RejectionReason;
+                needsToClose = true;
+            }
+            else
+            {
+                SshSessionConfiguration config = new();
+                SshClientCredentials clientCreds = new(identity.InternalName.ToString(), identity.Keys);
+                SshClientSession session = new(config, new TraceSource("AdLib_SshClient"));
 
-        if (await session.AuthenticateAsync(clientCreds, ct))
-        {
-            SshChannel channel = await session.OpenChannelAsync(ct);
-            // cert + result are now set, unless validator never ran
-            this._connection = new SecureConnection(tcpClient, channel);
+                await session.ConnectAsync(tcpClient.GetStream(), ct);
+
+                session.Authenticating += (_, args) =>
+                {
+                    ClaimsPrincipal? value = ClientValidateRemote(
+                        host, args.PublicKey, args.AuthenticationType, trustedCerts, out result
+                    );
+
+                    keyTask.SetResult(args.PublicKey);
+                    args.AuthenticationTask = Task.FromResult(value);
+                };
+
+                try
+                {
+                    if (await session.AuthenticateAsync(clientCreds, ct))
+                    {
+                        SshChannel channel = await session.OpenChannelAsync(ct);
+                        // cert + result are now set, unless validator never ran
+                        this._connection = new SecureConnection(tcpClient, channel);
+                        needsToClose = false;
+                    }
+                    else
+                    {
+                        // give up (there's no point in recovering if the other side is going to lie about its key)
+                        this._connection = null;
+                        if (!keyTask.Task.IsCompleted) keyTask.TrySetResult(null);
+
+                        await session.CloseAsync(SshDisconnectReason.ByApplication, "Authentication failed");
+                        session.Dispose();
+                        needsToClose = true;
+                    }
+                }
+                catch (SshConnectionException)
+                {
+                    needsToClose = true;
+                    session.Dispose();
+                }
+            }
         }
-        else
+        finally
         {
-            // clean up (since the streams are invalid now)
-            this._connection = null;
-            // if we didn't even get far enough to authenticate then indicate there is no key
+            // always have some result set even if it failed to avoid deadlock
             if (!keyTask.Task.IsCompleted) keyTask.TrySetResult(null);
-
-            await session.CloseAsync(SshDisconnectReason.ByApplication, "Authentication failed");
-
-            session.Dispose();
-            tcpClient.Dispose();
-
-            CancellationTokenSource recoveryConnectTimeout = new(TimeSpan.FromSeconds(RecoveryTimeout));
-            await using CancellationTokenRegistration _ = ct.Register(recoveryConnectTimeout.Cancel);
-
-            // since we need to reconnect, if the host becomes completely unavailable, don't keep trying for forever
-            try
-            {
-                using TcpClient recoveryClient = new();
-                await recoveryClient.ConnectAsync(host, RecoveryPort, recoveryConnectTimeout.Token);
-                reason = await CommunicateRejectionAsync(recoveryClient, result, recoveryConnectTimeout.Token);
-            }
-            catch (Exception e) when (e is OperationCanceledException or TimeoutException)
-            {
-                reason = RejectionReason.CouldNotGetReason;
-            }
+            if (needsToClose) tcpClient.Dispose();
         }
 
         IKeyPair? pair = await keyTask.Task;
@@ -89,10 +122,11 @@ public sealed class SecureClient(Identity identity, TrustStore trustedCerts) : I
         return new ConnectionInfo
         {
             Result = result,
+            Reason = reason,
             Hostname = host,
             Connection = this._connection,
             PublicKey = pair,
-            Reason = reason,
+            PublicKeyFingerprint = remoteFingerprint,
         };
     }
 }

@@ -193,4 +193,18 @@ public class TrustStore
 
         return false;
     }
+
+    public bool IsFingerprintValid(string host, ReadOnlySpan<byte> bytes) => this._trustedHostKeys[host].PublicKeyInfo
+                                                                                 .PublicKeyFingerprint.AsSpan()
+                                                                                 .SequenceEqual(bytes);
+
+    public bool HasPlainFingerprint(ReadOnlySpan<byte> fingerprint)
+    {
+        foreach (PublicKeyInfo k in this._trustedKeys)
+        {
+            if (k.PublicKeyFingerprint.AsSpan().SequenceEqual(fingerprint)) return true;
+        }
+
+        return false;
+    }
 }
