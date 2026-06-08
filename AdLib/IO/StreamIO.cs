@@ -208,4 +208,25 @@ public static class StreamIO
         int actualLength = length ?? (int)await ReadUInt32Async(stream, token);
         return await ReadFixedAsync(stream, actualLength, token);
     }
+
+    public static void WriteSmallBlock(Stream stream, byte[] bytes)
+    {
+        if (bytes.Length > byte.MaxValue)
+        {
+            throw new InvalidOperationException("Message is too long");
+        }
+
+        stream.WriteByte((byte)bytes.Length);
+        stream.Write(bytes, 0, bytes.Length);
+    }
+
+    public static byte[] ReadSmallBlock(Stream stream)
+    {
+        int toRead = stream.ReadByte();
+        if (toRead == -1) throw new EndOfStreamException("Insufficient data");
+
+        byte[] data = new byte[toRead];
+        while (toRead > 0) toRead -= stream.Read(data, data.Length - toRead, toRead);
+        return data;
+    }
 }
