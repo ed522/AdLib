@@ -32,6 +32,7 @@ public sealed class FileTransferClient : IDisposable
     private SecureClient? _secureClient;
     public bool IsConnected { get; private set; }
     public string? ServerFolder { get; private set; }
+    public char ServerPathSeparator { get; private set; }
 
     public void Dispose()
     {
@@ -143,7 +144,7 @@ public sealed class FileTransferClient : IDisposable
                 this.RequestEntered += (_, _) => this._communicationHandle.Release();
 
                 // do handshake
-                await this.SendMessage(new InitMessage());
+                await this.SendMessage(new InitMessage { PathSeparator = Path.PathSeparator });
                 IMessage ackMsg = await this.WaitForMessage();
 
                 if (ackMsg is not InitAckMessage acknowledgement)
@@ -152,6 +153,7 @@ public sealed class FileTransferClient : IDisposable
                 }
 
                 this.ServerFolder = acknowledgement.SharedFolderPath;
+                this.ServerPathSeparator = acknowledgement.PathSeparator;
 
                 // this is the point where we are "connected" (successfully connected to a trusted & funcitoning host)
                 this.Connected?.Invoke(host);

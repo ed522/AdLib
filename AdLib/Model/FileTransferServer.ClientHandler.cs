@@ -39,6 +39,7 @@ public sealed partial class FileTransferServer
         }
 
         public ClientInfo Info { get; }
+        public char ClientPathSeparator { get; private set; }
 
         public event EventHandler<DisconnectedEventArgs>? Disconnected;
         public event EventHandler<FatalErrorOccurredEventArgs>? FatalErrorOccurred;
