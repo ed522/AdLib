@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Asset group manifest definition",
+  "type": "object",
+  "properties": {
+    "sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "formats": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "class": {
+                  "enum": [
+                    "bitmap",
+                    "json",
+                    "binary"
+                  ]
+                },
+                "filetype": {
+                  "type": "string"
+                },
+                "resolutions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "class",
+                "filetype",
+                "resolutions"
+              ]
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "formats",
+          "files"
+        ]
+      }
+    }
+  },
+  "required": [
+    "sets"
+  ]
+}

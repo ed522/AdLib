@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Global manifest definition",
+  "type": "object",
+  "properties": {
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "dirname": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dirname"
+        ]
+      }
+    }
+  },
+  "required": [
+    "groups"
+  ]
+}

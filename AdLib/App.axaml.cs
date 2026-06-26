@@ -1,5 +1,6 @@
 using System;
 
+using AdLib.AssetManagement;
 using AdLib.Config;
 using AdLib.View;
 using AdLib.ViewModel;
@@ -32,11 +33,12 @@ public class App : Application
     
     public override void Initialize() { AvaloniaXamlLoader.Load(this); }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
         try
         {
             ConfigDirectories.SetupConfigDirectories();
+            await AssetManager.LoadAssets();
 
             Log.Info("Application started");
 
