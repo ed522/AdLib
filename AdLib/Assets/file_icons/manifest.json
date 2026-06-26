@@ -1,0 +1,72 @@
+{
+  "sets": [
+    {
+      "formats": [
+        {
+          "class": "json",
+          "filetype": "json",
+          "resolutions": []
+        }
+      ],
+      "files": [
+        "meta_filetype"
+      ]
+    },
+    {
+      "formats": [
+        {
+          "class": "bitmap",
+          "filetype": "png",
+          "resolutions": [
+            "128x128",
+            "256x256"
+          ]
+        }
+      ],
+      "files": [
+        "file_archive_image",
+        "file_archive_special",
+        "file_archive_tar",
+        "file_archive_zip",
+        "file_audio_lossless",
+        "file_audio_lossy",
+        "file_audio_raw",
+        "file_audio_sequenced",
+        "file_binary",
+        "file_compiled_library",
+        "file_config_json",
+        "file_config_markup",
+        "file_config_plain",
+        "file_database",
+        "file_document",
+        "file_document_pdf",
+        "file_encrypted",
+        "file_executable_windows",
+        "file_font",
+        "file_image_graphical",
+        "file_image_photographic",
+        "file_image_project",
+        "file_image_raw",
+        "file_image_vector",
+        "file_installer_mac",
+        "file_installer_unix",
+        "file_installer_windows",
+        "file_keys",
+        "file_markdown",
+        "file_markup_html",
+        "file_markup_xml",
+        "file_model3d",
+        "file_object_file",
+        "file_plain_text",
+        "file_presentation",
+        "file_script_other",
+        "file_script_unix",
+        "file_script_windows",
+        "file_spreadsheet",
+        "file_unknown",
+        "file_video",
+        "folder"
+      ]
+    }
+  ]
+}

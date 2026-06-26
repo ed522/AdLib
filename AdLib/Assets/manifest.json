@@ -1,4 +1,8 @@
 {
   "groups": [
+    {
+      "name": "file_icons",
+      "dirname": "file_icons"
+    }
   ]
 }

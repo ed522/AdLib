@@ -46,5 +46,18 @@
             for details.
         </TextBlock>
 
+        <Separator Classes="separator-minor" />
+        <TextBlock Classes="h3">Credits</TextBlock>
+
+        <TextBlock Classes="b text">Siemens Industrial Experience icons - originally MIT</TextBlock>
+        <TextBlock Classes="text">
+            Icons were edited to adapt to this project. The source versions are MIT but the modified versions are
+            distributed under the same license as the rest of the project.
+        </TextBlock>
+        <HyperlinkButton Classes="a-button a-inline"
+                         NavigateUri="https://github.com/siemens/ix-icons/blob/main/LICENSE.md">
+            Project LICENSE.md (MIT)
+        </HyperlinkButton>
+
     </StackPanel>
 </UserControl>

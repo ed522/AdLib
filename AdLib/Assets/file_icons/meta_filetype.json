@@ -1,0 +1,374 @@
+[
+  {
+    "type": "folder",
+    "icon": "folder",
+    "extensions": []
+  },
+  {
+    "type": "unknown",
+    "icon": "file_unknown",
+    "extensions": []
+  },
+  {
+    "type": "binary",
+    "icon": "file_binary",
+    "extensions": [
+      "bin",
+      "dat"
+    ]
+  },
+  {
+    "type": "document_plain_text",
+    "icon": "file_plain_text",
+    "extensions": [
+      "txt"
+    ]
+  },
+  {
+    "type": "document_markdown",
+    "icon": "file_markdown",
+    "extensions": [
+      "md"
+    ]
+  },
+  {
+    "type": "archive_zip",
+    "icon": "file_archive_zip",
+    "extensions": [
+      "zip"
+    ]
+  },
+  {
+    "type": "archive_special",
+    "icon": "file_archive_special",
+    "extensions": [
+      "7z",
+      "rar"
+    ]
+  },
+  {
+    "type": "archive_image",
+    "icon": "file_archive_image",
+    "extensions": [
+      "iso",
+      "vhd",
+      "vhdx",
+      "qcow",
+      "img"
+    ]
+  },
+  {
+    "type": "archive_tar",
+    "icon": "file_archive_tar",
+    "extensions": [
+      "tar",
+      "gz",
+      "bz2",
+      "xz",
+      "zst",
+      "tgz",
+      "tbz2",
+      "txz",
+      "tzst"
+    ]
+  },
+  {
+    "type": "office_document",
+    "icon": "file_document",
+    "extensions": [
+      "doc",
+      "docx",
+      "odt",
+      "rtf"
+    ]
+  },
+  {
+    "type": "office_pdf",
+    "icon": "file_document_pdf",
+    "extensions": [
+      "pdf"
+    ]
+  },
+  {
+    "type": "office_spreadsheet",
+    "icon": "file_spreadsheet",
+    "extensions": [
+      "ods",
+      "xls",
+      "xlsx",
+      "xlsm",
+      "xlt",
+      "xltm",
+      "xltx",
+      "xlr",
+      "csv"
+    ]
+  },
+  {
+    "type": "office_presentation",
+    "icon": "file_presentation",
+    "extensions": [
+      "odp",
+      "ppt",
+      "pptx",
+      "pptm"
+    ]
+  },
+  {
+    "type": "database",
+    "icon": "file_database",
+    "extensions": [
+      "db",
+      "sqlite"
+    ]
+  },
+  {
+    "type": "audio_lossy",
+    "icon": "file_audio_lossy",
+    "extensions": [
+      "mp3",
+      "aac",
+      "ogg",
+      "aiff",
+      "wma",
+      "m4a"
+    ]
+  },
+  {
+    "type": "audio_lossless",
+    "icon": "file_audio_lossless",
+    "extensions": [
+      "flac",
+      "ape"
+    ]
+  },
+  {
+    "type": "audio_sequenced",
+    "icon": "file_audio_sequenced",
+    "extensions": [
+      "mid"
+    ]
+  },
+  {
+    "type": "audio_raw",
+    "icon": "file_audio_raw",
+    "extensions": [
+      "wav"
+    ]
+  },
+  {
+    "type": "video",
+    "icon": "file_video",
+    "extensions": [
+      "mp4",
+      "avi",
+      "mov",
+      "webm",
+      "mkv",
+      "wmv"
+    ]
+  },
+  {
+    "type": "3dmodel",
+    "icon": "file_model3d",
+    "extensions": [
+      "obj",
+      "mtl",
+      "stl"
+    ]
+  },
+  {
+    "type": "image_photographic_raster",
+    "icon": "file_image_photographic",
+    "extensions": [
+      "jpg",
+      "jpeg"
+    ]
+  },
+  {
+    "type": "image_graphical_raster",
+    "icon": "file_image_graphical",
+    "extensions": [
+      "png",
+      "gif",
+      "bmp",
+      "tiff",
+      "webp",
+      "avif",
+      "ico"
+    ]
+  },
+  {
+    "type": "image_raw_raster",
+    "icon": "file_image_raw",
+    "extensions": [
+      "raw",
+      "dng"
+    ]
+  },
+  {
+    "type": "image_project",
+    "icon": "file_image_project",
+    "extensions": [
+      "paint",
+      "xcf",
+      "psd",
+      "ai"
+    ]
+  },
+  {
+    "type": "image_vector_illustration",
+    "icon": "file_image_vector",
+    "extensions": [
+      "svg",
+      "svgz"
+    ]
+  },
+  {
+    "type": "executable_windows",
+    "icon": "file_executable_windows",
+    "extensions": [
+      "exe"
+    ]
+  },
+  {
+    "type": "compiled_library",
+    "icon": "file_compiled_library",
+    "extensions": [
+      "so",
+      "a",
+      "dll",
+      "dylib"
+    ]
+  },
+  {
+    "type": "compiled_object",
+    "icon": "file_object_file",
+    "extensions": [
+      "o"
+    ]
+  },
+  {
+    "type": "installer_windows",
+    "icon": "file_installer_windows",
+    "extensions": [
+      "msi",
+      "msix"
+    ]
+  },
+  {
+    "type": "installer_unix",
+    "icon": "file_installer_unix",
+    "extensions": [
+      "appimage",
+      "deb",
+      "rpm"
+    ]
+  },
+  {
+    "type": "installer_mac",
+    "icon": "file_installer_mac",
+    "extensions": [
+      "app",
+      "dmg",
+      "pkg"
+    ]
+  },
+  {
+    "type": "font",
+    "icon": "file_font",
+    "extensions": [
+      "bin",
+      "dat"
+    ]
+  },
+  {
+    "type": "cryptographic_encrypted",
+    "icon": "file_encrypted",
+    "extensions": [
+      "gpg",
+      "pgp"
+    ]
+  },
+  {
+    "type": "cryptographic_keys",
+    "icon": "file_keys",
+    "extensions": [
+      "pem",
+      "p12",
+      "pfx",
+      "p7b",
+      "p7c",
+      "pub"
+    ]
+  },
+  {
+    "type": "script_unix",
+    "icon": "file_script_unix",
+    "extensions": [
+      "sh"
+    ]
+  },
+  {
+    "type": "script_windows",
+    "icon": "file_script_windows",
+    "extensions": [
+      "bat",
+      "cmd",
+      "ps1",
+      "ps2"
+    ]
+  },
+  {
+    "type": "script_other",
+    "icon": "file_script_other",
+    "extensions": [
+      "py"
+    ]
+  },
+  {
+    "type": "config_plain",
+    "icon": "file_config_plain",
+    "extensions": [
+      "ini",
+      "inf",
+      "reg",
+      "conf"
+    ]
+  },
+  {
+    "type": "config_json",
+    "icon": "file_config_json",
+    "extensions": [
+      "json"
+    ]
+  },
+  {
+    "type": "config_markup",
+    "icon": "file_config_markup",
+    "extensions": [
+      "yaml",
+      "yml",
+      "toml"
+    ]
+  },
+  {
+    "type": "markup_html",
+    "icon": "file_markup_html",
+    "extensions": [
+      "html",
+      "xhtml"
+    ]
+  },
+  {
+    "type": "markup_xml",
+    "icon": "file_markup_xml",
+    "extensions": [
+      "xml",
+      "xaml",
+      "axaml",
+      "slnx",
+      "rss"
+    ]
+  }
+]
