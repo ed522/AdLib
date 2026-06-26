@@ -13,7 +13,7 @@
                     <StackPanel Orientation="Vertical" Classes="background">
 
                         <Panel HorizontalAlignment="Stretch" Margin="0, 0, 0, 12">
-                            <TextBlock Classes="h2" Text="{TemplateBinding Title}"
+                            <TextBlock Classes="h3" Text="{TemplateBinding Title}"
                                        HorizontalAlignment="Left" VerticalAlignment="Center" />
 
                             <!-- only shows if the implementing element allows it -->

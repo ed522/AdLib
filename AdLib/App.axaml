@@ -50,7 +50,15 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBlock.h2">
-            <Setter Property="FontSize" Value="24.0" />
+            <Setter Property="FontSize" Value="36.0" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="4" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.h3">
+            <Setter Property="FontSize" Value="28.0" />
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="4" />
@@ -107,6 +115,10 @@
             <Setter Property="Margin" Value="8, 12" />
             <Setter Property="Background" Value="{x:Static root:App.SubtleLineBrush}" />
         </Style>
+        <Style Selector="Separator.separator-vertical">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="NaN" />
+        </Style>
 
         <Style Selector="Separator.separator-blank-16px">
             <Setter Property="Background" Value="#00000000" />
@@ -119,11 +131,11 @@
             <Setter Property="Height" Value="8" />
         </Style>
 
-        <Style Selector=":is(Panel).modal-button-group">
+        <Style Selector=":is(Panel).button-group">
             <Setter Property="Margin" Value="8" />
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
-        <Style Selector="StackPanel.modal-button-group">
+        <Style Selector="StackPanel.button-group">
             <Setter Property="Orientation" Value="Horizontal" />
             <Setter Property="Spacing" Value="4" />
         </Style>
@@ -134,7 +146,11 @@
             <Setter Property="FontWeight" Value="Bold" />
         </Style>
         <Style Selector="Button.button-default" />
-
+        <Style Selector="Button.button-large">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="Padding" Value="8" />
+        </Style>
+        
         <Style Selector="ContentControl.content">
             <Setter Property="Padding" Value="8, 8, 8, 16" />
             <Setter Property="Margin" Value="20" />
