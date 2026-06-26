@@ -198,8 +198,7 @@ public partial class StartScreenViewModel : PageViewModel
     }
 
     [RelayCommand]
-    public void GoToAboutScreen() =>
-        this.ChangePage(new ErrorViewModel("Not implemented"));
+    public void GoToAboutScreen() => this.ChangePage(new AboutScreenViewModel());
 
     [RelayCommand]
     public void GoToSettingsScreen() =>

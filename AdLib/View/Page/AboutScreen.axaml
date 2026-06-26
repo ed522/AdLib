@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:AdLib.ViewModel.Page"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="AdLib.View.Page.AboutScreen"
+             x:DataType="vm:AboutScreenViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.text">
+            <Setter Property="Padding" Value="8,8,0,0" />
+            <Setter Property="FontSize" Value="16" />
+        </Style>
+        <Style Selector="HyperlinkButton.a-button">
+            <Setter Property="Margin" Value="6,8,0,0" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style Selector="HyperlinkButton.text">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Orientation="Vertical">
+
+        <StackPanel Orientation="Horizontal">
+            <!-- TODO hack -->
+            <Button Command="{Binding ReturnCommand}" Width="32" Height="32" Margin="8" FontSize="16">&lt;</Button>
+            <TextBlock Classes="h2">About</TextBlock>
+        </StackPanel>
+
+        <TextBlock Classes="text">AdLib is an ad-hoc, secure file transfer app with minimal hassle.</TextBlock>
+        <TextBlock Classes="text">
+            <TextBlock.Styles>
+                <Style Selector="InlineUIContainer">
+                    <Setter Property="BaselineAlignment" Value="Bottom" />
+                </Style>
+            </TextBlock.Styles>
+            AdLib is free software, licensed under the GPL. See
+            <HyperlinkButton Classes="text a-inline" TextBlock.BaselineOffset="0"
+                             NavigateUri="https://github.com/ed522/AdLib/blob/main/LICENSE">
+                LICENSE
+            </HyperlinkButton>
+            for details.
+        </TextBlock>
+
+    </StackPanel>
+</UserControl>
