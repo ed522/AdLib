@@ -13,12 +13,16 @@ using AdLib.ViewModel.Modal;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using NLog;
+
 using static AdLib.Identities.IdentityStore;
 
 namespace AdLib.ViewModel.Page;
 
 public partial class StartScreenViewModel : PageViewModel
 {
+    private static readonly Logger Log = LogManager.GetLogger(nameof(StartScreenViewModel));
+    
     [ObservableProperty] private IdentityLabel _clientSelectedIdentity;
     [ObservableProperty] private IdentityLabel _serverSelectedIdentity;
 
@@ -69,36 +73,43 @@ public partial class StartScreenViewModel : PageViewModel
     [RelayCommand]
     public async Task CreateNewServerIdentity()
     {
-        ModalTransitionInfo transition = await this.OpenModalAsync(MakeIdentityCreationModal());
-
-        if (transition.Modal is not UserPasswordModalViewModel modal)
+        try
         {
-            throw new InvalidOperationException("Invalid modal received");
-        }
+            ModalTransitionInfo transition = await this.OpenModalAsync(MakeIdentityCreationModal());
 
-        if (transition.Action != ModalViewModel.CloseAction.Submit) return;
-
-        TaskCompletionSource<bool> tcs = new();
-        this.IsWorking = true;
-
-        ThreadPool.QueueUserWorkItem(info =>
-        {
-            string friendlyName = info.Name;
-            char[] password = info.Password.ToCharArray();
-
-            lock (this._serverStoreLock)
+            if (transition.Modal is not UserPasswordModalViewModel modal)
             {
-                Identity ident = this._serverStore.CreateNewIdentity(friendlyName, password);
-                IdentityLabel label = new(ident.InternalName, ident.FriendlyName);
-                this.ServerAvailableIdentities.Add(label);
-                this.ServerSelectedIdentity = label;
+                throw new InvalidOperationException("Invalid modal received");
             }
 
-            tcs.SetResult(true);
-        }, modal, true);
+            if (transition.Action != ModalViewModel.CloseAction.Submit) return;
 
-        await tcs.Task;
-        this.IsWorking = false;
+            TaskCompletionSource<bool> tcs = new();
+            this.IsWorking = true;
+
+            ThreadPool.QueueUserWorkItem(info =>
+            {
+                string friendlyName = info.Name;
+                char[] password = info.Password.ToCharArray();
+
+                lock (this._serverStoreLock)
+                {
+                    Identity ident = this._serverStore.CreateNewIdentity(friendlyName, password);
+                    IdentityLabel label = new(ident.InternalName, ident.FriendlyName);
+                    this.ServerAvailableIdentities.Add(label);
+                    this.ServerSelectedIdentity = label;
+                }
+
+                tcs.SetResult(true);
+            }, modal, true);
+
+            await tcs.Task;
+            this.IsWorking = false;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Failed to create server identity");
+        }
     }
 
     [RelayCommand]

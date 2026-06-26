@@ -1,3 +1,6 @@
+using System;
+
+using AdLib.Config;
 using AdLib.View;
 using AdLib.ViewModel;
 
@@ -7,10 +10,14 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 
+using NLog;
+
 namespace AdLib;
 
 public class App : Application
 {
+    private static readonly Logger Log = LogManager.GetLogger(nameof(App));
+    
     public static readonly IBrush BackgroundBrush = new SolidColorBrush(Color.Parse("#252530"));
     public static readonly IBrush DimmedBackgroundBrush = new SolidColorBrush(Color.Parse("#101010"), 0.7);
 
@@ -27,16 +34,29 @@ public class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        if (this.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        try
         {
-            desktop.MainWindow = new MainWindow
+            ConfigDirectories.SetupConfigDirectories();
+
+            Log.Info("Application started");
+
+            if (this.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                DataContext = new MainWindowViewModel(),
-            };
+                desktop.MainWindow = new MainWindow
+                {
+                    DataContext = new MainWindowViewModel(),
+                };
 
-            desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                desktop.MainWindow.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                desktop.MainWindow.Show();
+            }
+
+            base.OnFrameworkInitializationCompleted();
         }
-
-        base.OnFrameworkInitializationCompleted();
+        catch (Exception ex)
+        {
+            LogManager.GetLogger("App").Fatal(ex, "Fatal error occurred during application startup.");
+            Environment.Exit(1);
+        }
     }
 }

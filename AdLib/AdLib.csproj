@@ -21,7 +21,20 @@
         <PackageReference Include="Microsoft.DevTunnels.Ssh.Keys" Version="3.12.29"/>
         <PackageReference Include="Microsoft.DevTunnels.Ssh.Tcp" Version="3.12.29"/>
 
+        <PackageReference Include="NJsonSchema" Version="11.6.1"/>
+
+        <PackageReference Include="NLog" Version="6.1.3"/>
+
         <PackageReference Include="System.IO.Hashing" Version="10.0.7"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <AvaloniaResource Include="Assets\**"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Assets\**" Exclude="Assets\nlog.config"/>
+        <EmbeddedResource Include="Assets\nlog.config"/>
     </ItemGroup>
 
     <ItemGroup>
