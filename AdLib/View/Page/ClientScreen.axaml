@@ -3,46 +3,92 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:AdLib.ViewModel.Page"
-             xmlns:conv="clr-namespace:AdLib.View.Converters"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="1366" d:DesignHeight="768"
              x:DataType="vm:ClientScreenViewModel" x:Class="AdLib.View.Page.ClientScreen">
-    <StackPanel Orientation="Vertical">
-        <TextBlock Classes="h2">Transfer files</TextBlock>
-        <Separator />
-        <StackPanel Orientation="Horizontal">
 
-            <ScrollViewer HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                <TreeView ItemsSource="{Binding LocalFiles.Children}">
-                    <TreeView.Styles>
-                        <Style Selector="TreeViewItem">
-                            <Setter Property="IsExpanded" Value="{Binding (vm:FileTreeNode).IsExpanded, Mode=TwoWay}" />
-                        </Style>
-                    </TreeView.Styles>
+    <UserControl.Styles>
+        <Style Selector="StackPanel.button-group-send">
+            <Setter Property="Margin" Value="8" />
+        </Style>
+    </UserControl.Styles>
 
-                    <TreeView.ItemTemplate>
-                        <TreeDataTemplate ItemsSource="{Binding Children}">
-                            <TextBlock Text="{Binding FullPath, Converter={x:Static conv:StringConversions.ToFileName}}" />
-                        </TreeDataTemplate>
-                    </TreeView.ItemTemplate>
-                </TreeView>
-            </ScrollViewer>
+    <Design.DataContext>
+        <vm:ClientScreenViewModel />
+    </Design.DataContext>
 
-            <ScrollViewer HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                <TreeView ItemsSource="{Binding RemoteFiles.Children}">
-                    <TreeView.Styles>
-                        <Style Selector="TreeViewItem">
-                            <Setter Property="IsExpanded" Value="{Binding (vm:FileTreeNode).IsExpanded, Mode=TwoWay}" />
-                        </Style>
-                    </TreeView.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,Auto,*" Margin="16"
+          VerticalAlignment="Stretch">
 
-                    <TreeView.ItemTemplate>
-                        <TreeDataTemplate ItemsSource="{Binding Children}">
-                            <TextBlock Text="{Binding FullPath, Converter={x:Static conv:StringConversions.ToFileName}}" />
-                        </TreeDataTemplate>
-                    </TreeView.ItemTemplate>
-                </TreeView>
-            </ScrollViewer>
-
+        <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Margin="8" Spacing="8">
+            <TextBlock Classes="h2">Transfer files</TextBlock>
+            <Separator />
         </StackPanel>
-    </StackPanel>
+
+        <TreeView Grid.Row="1" Grid.Column="0" SelectionMode="{Binding LocalSelectionMode}"
+                  ItemsSource="{Binding LocalFiles.Children}" SelectedItems="{Binding LocalSelected}">
+            <TreeView.Styles>
+                <Style Selector="TreeViewItem">
+                    <Setter Property="IsExpanded" Value="{Binding (vm:FileTreeNode).IsExpanded, Mode=TwoWay}" />
+                    <Setter Property="IsVisible" Value="{Binding (vm:FileTreeNode).ShouldBeShown}" />
+                </Style>
+            </TreeView.Styles>
+
+            <TreeView.ItemTemplate>
+                <TreeDataTemplate ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Image Source="{Binding Icon}" Width="24" Height="24" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding PartName}" VerticalAlignment="Bottom" />
+                    </StackPanel>
+                </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+
+        <Panel Grid.Row="2" Grid.Column="0">
+            <CheckBox HorizontalAlignment="Left" IsChecked="{Binding ShouldShowLocalHidden}">
+                Show hidden files
+            </CheckBox>
+            <StackPanel Classes="button-group button-group-send" HorizontalAlignment="Right">
+                <Button Classes="button-highlight button-large" IsEnabled="{Binding CanPut}"
+                        Command="{Binding PutFileCommand}">
+                    Send
+                </Button>
+            </StackPanel>
+        </Panel>
+
+        <Separator Grid.Row="1" Grid.Column="1" Grid.RowSpan="2" Classes="separator-vertical" />
+
+        <TreeView Grid.Row="1" Grid.Column="2" SelectionMode="{Binding RemoteSelectionMode}"
+                  ItemsSource="{Binding RemoteFiles.Children}" SelectedItems="{Binding RemoteSelected}">
+            <TreeView.Styles>
+                <Style Selector="TreeViewItem">
+                    <Setter Property="IsExpanded"
+                            Value="{Binding (vm:FileTreeNode).IsExpanded, Mode=TwoWay}" />
+                    <Setter Property="IsVisible" Value="{Binding (vm:FileTreeNode).ShouldBeShown}" />
+                </Style>
+            </TreeView.Styles>
+
+            <TreeView.ItemTemplate>
+                <TreeDataTemplate ItemsSource="{Binding Children}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <Image Source="{Binding Icon}" Width="24" Height="24" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding PartName}" VerticalAlignment="Bottom" />
+                    </StackPanel>
+                </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+
+        <Panel Grid.Row="2" Grid.Column="2">
+            <CheckBox IsChecked="{Binding ShouldShowRemoteHidden}" HorizontalAlignment="Right">
+                Show hidden files
+            </CheckBox>
+            <StackPanel Classes="button-group button-group-send" HorizontalAlignment="Left">
+                <Button Classes="button-highlight button-large" IsEnabled="{Binding CanGet}"
+                        Command="{Binding GetFileCommand}">
+                    Get
+                </Button>
+            </StackPanel>
+        </Panel>
+
+    </Grid>
+    <!-- </StackPanel> -->
 </UserControl>

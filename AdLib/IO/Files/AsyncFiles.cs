@@ -1,12 +1,14 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace AdLib.IO.Files;
 
-public class AsyncFiles
+public static class AsyncFiles
 {
     /// <summary>
     ///     Asynchronously enumerates files in a directory.
@@ -19,7 +21,7 @@ public class AsyncFiles
     /// </param>
     /// <param name="cancellationToken">The token to cancel this particular request</param>
     /// <returns>An async enumerable which yields the files in a given directory</returns>
-    public static async IAsyncEnumerable<string> EnumerateFilesAsync(
+    public static async IAsyncEnumerable<string> OrderedEnumerateFilesAsync(
         string path,
         string searchPattern = "*",
         SearchOption searchOption = SearchOption.TopDirectoryOnly,
@@ -27,7 +29,8 @@ public class AsyncFiles
     )
     {
         IEnumerable<string> files = await Task.Run(
-            () => Directory.EnumerateFiles(path, searchPattern, searchOption),
+            () => Directory.EnumerateFiles(path, searchPattern, searchOption)
+                           .OrderBy(d => d, StringComparer.CurrentCultureIgnoreCase),
             cancellationToken
         );
 
@@ -38,7 +41,7 @@ public class AsyncFiles
     }
 
     /// <summary>
-    ///     Asynchronously enumerates subdirectories in a directory.
+    ///     Asynchronously enumerates then sorts subdirectories in a directory.
     /// </summary>
     /// <param name="path">The path to search</param>
     /// <param name="searchPattern">The pattern to filter the results by (default *)</param>
@@ -48,7 +51,7 @@ public class AsyncFiles
     /// </param>
     /// <param name="cancellationToken">The token to cancel this particular request</param>
     /// <returns>An async enumerable which yields the subdirectories in a given directory</returns>
-    public static async IAsyncEnumerable<string> EnumerateDirectoriesAsync(
+    public static async IAsyncEnumerable<string> OrderedEnumerateDirectoriesAsync(
         string path,
         string searchPattern = "*",
         SearchOption searchOption = SearchOption.TopDirectoryOnly,
@@ -56,7 +59,8 @@ public class AsyncFiles
     )
     {
         IEnumerable<string> dirs = await Task.Run(
-            () => Directory.EnumerateDirectories(path, searchPattern, searchOption),
+            () => Directory.EnumerateDirectories(path, searchPattern, searchOption)
+                           .OrderBy(d => d, StringComparer.CurrentCultureIgnoreCase),
             cancellationToken
         );
 

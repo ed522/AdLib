@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-using AdLib.IO.Files;
 using AdLib.IO.Messages;
 
 namespace AdLib.IO;
@@ -301,7 +300,7 @@ public static class FileTransferUtils
             List<Task> inProgressUploads = [];
 
             // file includes full path + filename
-            await foreach (string file in AsyncFiles.EnumerateFilesAsync(localPath, cancellationToken: ct))
+            foreach (string file in Directory.EnumerateFiles(localPath))
             {
                 // directly upload file (no further recursion after this)
                 inProgressUploads.Add(
@@ -313,7 +312,7 @@ public static class FileTransferUtils
             inProgressUploads.Clear();
 
             // dir includes full path + dir name
-            await foreach (string dir in AsyncFiles.EnumerateDirectoriesAsync(localPath, cancellationToken: ct))
+            foreach (string dir in Directory.EnumerateDirectories(localPath))
             {
                 // recursively upload all directories - based on local & remote subdirectories of the current base
                 inProgressUploads.Add(
