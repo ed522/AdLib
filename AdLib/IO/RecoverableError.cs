@@ -6,6 +6,7 @@ public enum RecoverableError : uint
 
     ERRNO_IO_ERROR = 0x100,
     ERRNO_NO_ACCESS = 0x101,
+    ERRNO_NO_SUCH_FILE_OR_DIRECTORY = 0x102,
 
     ERRNO_INVALID_MESSAGE = 0x200,
     ERRNO_MESSAGE_NOT_EXPECTED = 0x201,

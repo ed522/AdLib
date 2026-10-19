@@ -2,16 +2,18 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
 using AdLib.IO;
 using AdLib.IO.Messages;
+using AdLib.Utils;
 
 namespace AdLib.Model;
 
-public sealed class FileTransferClient : IDisposable
+public sealed class FileTransferClient : IAsyncDisposable
 {
     public class FileListingReceivedEventArgs : EventArgs
     {
@@ -23,27 +25,38 @@ public sealed class FileTransferClient : IDisposable
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Random _random = new();
     private readonly ConcurrentQueue<ClientRequest> _requests = new();
-    private readonly ConcurrentQueue<IMessage> _messages = new();
+    private readonly Task _thread;
+    private readonly CancellationTokenSource _selfCancel = new();
 
-    private readonly MemoryStream _partialBuffer = new();
-    private uint _currentExpectedSize;
+    private readonly bool _ownsMessageChannel;
+    private SecureClient? _secureClient;
+    private IMessageChannel? _messageChannel;
 
     private string _latestDownload = "";
-    private SecureClient? _secureClient;
+    
     public bool IsConnected { get; private set; }
     public string? ServerFolder { get; private set; }
     public char ServerPathSeparator { get; private set; }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        await this._thread;
+        
         this._secureClient?.Dispose();
 
+        Task.WaitAll(this._activeDownloads.Values.Select(p => p.stream.DisposeAsync().AsTask()));
         foreach ((string partPath, FileStream stream) download in this._activeDownloads.Values)
         {
-            download.stream.Dispose();
+            await download.stream.DisposeAsync();
         }
 
         this._activeDownloads.Clear();
+        this._communicationHandle.Dispose();
+
+        if (this._ownsMessageChannel)
+        {
+            this._messageChannel?.Dispose();
+        }
     }
 
     public event EventHandler<FileListingReceivedEventArgs>? FileListingReceived;
@@ -59,130 +72,35 @@ public sealed class FileTransferClient : IDisposable
     // allowed to run by default
     private readonly SemaphoreSlim _communicationHandle = new(1);
 
-    private class MessageReceivedEventArgs : EventArgs
-    {
-        public required IMessage Message { get; init; }
-    }
+    private event EventHandler<EventArgs<ClientRequest>>? RequestEntered;
 
-    private class RequestEnteredEventArgs : EventArgs
+    public FileTransferClient(string host, Identity identity, TrustStore store)
     {
-        public required ClientRequest Request { get; init; }
-    }
+        this._ownsMessageChannel = true;
 
-    private event EventHandler<MessageReceivedEventArgs>? MessageReceived;
-    private event EventHandler<RequestEnteredEventArgs>? RequestEntered;
-
-    public void AddRequest(ClientRequest request)
-    {
-        this._requests.Enqueue(request);
-        this.RequestEntered?.Invoke(this, new RequestEnteredEventArgs { Request = request });
-    }
-
-    public Task ConnectAndListen(string host, Identity identity, TrustStore store)
-    {
-        Task thread = Task.Run(async () =>
+        this._thread = Task.Run(async () =>
         {
             try
             {
-                this._secureClient = new SecureClient(identity, store);
+                IMessageChannel? messageChannel = await this.Connect(host, identity, store);
 
-                SecureConnectionUtils.ConnectionInfo info = await this._secureClient.ConnectAsync(host);
-
-                SecureConnection? connection = info.Connection;
-                SecureConnectionUtils.ConnectionResult result = info.Result;
-                SecureConnectionUtils.RejectionReason reason = info.Reason;
-
-                // connection failed - raise the event then bail (stream is expected to be null) - does not return
-                if (result != SecureConnectionUtils.ConnectionResult.Success ||
-                    reason != SecureConnectionUtils.RejectionReason.None)
+                // authentication failed (or no connection could be made) - the relevant event was already raised
+                if (messageChannel is null)
                 {
-                    if (info.PublicKey is null)
-                    {
-                        IOException ex = new("Remote host did not offer a certificate");
-                        this.CloseAfterError(ex);
-                        throw ex;
-                    }
-
-                    // handles adding trust, showing fingerprint, error dialogues etc.
-                    this.AuthenticationError?.Invoke(
-                        host, store.FindPublicKeyOrDefault(info.PublicKey), info.PublicKey, result, reason
-                    );
-
                     return;
                 }
-
-                // quick sanity check
-                if (connection is null || this._secureClient.Channel is null)
+                else
                 {
-                    // stream is null but no error was thrown - this is a bug
-                    InvalidOperationException ex = new("TLS connection is null after creation");
-                    this.CloseAfterError(ex);
-                    throw ex;
+                    this._messageChannel = messageChannel;
                 }
 
-                connection.Channel.DataReceived += (_, args) =>
-                {
-                    this._currentExpectedSize = FileTransferUtils.BufferMessage(
-                        this._currentExpectedSize,
-                        args.Array,
-                        this._partialBuffer,
-                        out IMessage? message
-                    );
-
-                    connection.Channel.AdjustWindow((uint)args.Array.Length);
-
-                    // not null on complete message, null while buffering
-                    if (message is not null)
-                    {
-                        this._messages.Enqueue(message);
-                        this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
-                    }
-                };
-
-                // allows thread to continue accepting requests
-                this.MessageReceived += (_, _) => this._communicationHandle.Release();
-                this.RequestEntered += (_, _) => this._communicationHandle.Release();
-
-                // do handshake
-                await this.SendMessage(new InitMessage { PathSeparator = Path.PathSeparator });
-                IMessage ackMsg = await this.WaitForMessage();
-
-                if (ackMsg is not InitAckMessage acknowledgement)
-                {
-                    throw new InvalidOperationException($"Expected InitAckMessage, got {ackMsg.Header}");
-                }
-
-                this.ServerFolder = acknowledgement.SharedFolderPath;
-                this.ServerPathSeparator = acknowledgement.PathSeparator;
-
-                // this is the point where we are "connected" (successfully connected to a trusted & funcitoning host)
-                this.Connected?.Invoke(host);
-                this.IsConnected = true;
-
-                while (!this._cancellationTokenSource.IsCancellationRequested)
-                {
-                    while (this._messages.TryDequeue(out IMessage? message))
-                    {
-                        await this.HandleServerMessage(message);
-                    }
-
-                    while (this._requests.TryDequeue(out ClientRequest request))
-                    {
-                        // always prioritize server messages over requests, since other messages could throw off
-                        // certain flows/transactions used by the server
-                        if (!this._messages.IsEmpty) continue;
-                        await this.HandleRequest(request);
-                    }
-
-                    // unset when a message/request is entered
-                    await this._communicationHandle.WaitAsync();
-                }
+                await this.Listen(messageChannel, host);
             }
-            catch (Exception e)when (e is TaskCanceledException or OperationCanceledException
-                                         or AggregateException
-                                         {
-                                             InnerException: TaskCanceledException or OperationCanceledException,
-                                         })
+            catch (Exception e) when (e is TaskCanceledException or OperationCanceledException
+                                          or AggregateException
+                                          {
+                                              InnerException: TaskCanceledException or OperationCanceledException,
+                                          })
             {
                 // ignore cancellations
             }
@@ -190,66 +108,176 @@ public sealed class FileTransferClient : IDisposable
             {
                 this.Disconnect(); // does not fire events nor send messages, also frees managed resources
             }
-        });
-
-        return thread;
+        }, this._selfCancel.Token);
     }
 
-    private async Task<IMessage> WaitForMessage(CancellationToken ct = default)
+    /// <summary>
+    ///     Starts listening for messages on an already-established channel, without performing any connection
+    ///     setup. Useful if the caller owns the connection/channel (for example, in tests).
+    /// </summary>
+    /// <param name="messageChannel">the channel messages are read from and written to</param>
+    /// <param name="host">the host name reported to <see cref="Connected" />; informational only</param>
+    public FileTransferClient(IMessageChannel messageChannel, string host = "")
     {
-        if (this._messages.TryDequeue(out IMessage? immediate))
+        this._ownsMessageChannel = false;
+        this._messageChannel = messageChannel;
+
+        this._thread = Task.Run(async () =>
         {
-            return immediate;
+            try
+            {
+                await this.Listen(messageChannel, host);
+            }
+            catch (Exception e) when (e is TaskCanceledException or OperationCanceledException
+                                          or AggregateException
+                                          {
+                                              InnerException: TaskCanceledException or OperationCanceledException,
+                                          })
+            {
+                // ignore cancellations
+            }
+            finally
+            {
+                this.Disconnect();
+            }
+        }, this._selfCancel.Token);
+    }
+
+    /// <summary>
+    ///     Performs the connection setup and returns the resulting message channel, or <c>null</c> if the
+    ///     connection was not successful.
+    /// </summary>
+    private async Task<IMessageChannel?> Connect(string host, Identity identity, TrustStore store)
+    {
+        this._secureClient = new SecureClient(identity, store);
+
+        SecureConnectionUtils.ConnectionInfo info = await this._secureClient.ConnectAsync(host);
+
+        SecureConnection? connection = info.Connection;
+        SecureConnectionUtils.ConnectionResult result = info.Result;
+        SecureConnectionUtils.RejectionReason reason = info.Reason;
+
+        // connection failed - raise the event then bail (stream is expected to be null) - does not return
+        if (result != SecureConnectionUtils.ConnectionResult.Success ||
+            reason != SecureConnectionUtils.RejectionReason.None)
+        {
+            if (info.PublicKey is null)
+            {
+                IOException ex = new("Remote host did not offer a certificate");
+                this.ForceDisconnect(ex);
+                throw ex;
+            }
+
+            // handles adding trust, showing fingerprint, error dialogues etc.
+            this.AuthenticationError?.Invoke(
+                host, store.FindPublicKeyOrDefault(info.PublicKey), info.PublicKey, result, reason
+            );
+
+            return null;
         }
 
-        TaskCompletionSource<IMessage> tcs = new();
-        EventHandler<MessageReceivedEventArgs> onReceived = (_, args) => { tcs.SetResult(args.Message); };
+        // quick sanity check
+        if (connection is null || this._secureClient.Channel is null)
+        {
+            // stream is null but no error was thrown - this is a bug
+            InvalidOperationException ex = new("TLS connection is null after creation");
+            this.ForceDisconnect(ex);
+            throw ex;
+        }
 
-        ct.Register(() => tcs.TrySetCanceled());
+        return new BlockMessageChannel(new SshDataBlockChannel(this._secureClient.Channel));
+    }
 
-        this.MessageReceived += onReceived;
-        IMessage message = await tcs.Task;
-        this.MessageReceived -= onReceived;
-        return message;
+    public void AddRequest(ClientRequest request)
+    {
+        this._requests.Enqueue(request);
+        this.RequestEntered?.Invoke(this, new EventArgs<ClientRequest> { Value = request });
+    }
+
+    private async Task Listen(IMessageChannel messageChannel, string host)
+    {
+        this._messageChannel = messageChannel;
+        this._messageChannel.MessageReceived += (_, _) => this._communicationHandle.Release();
+
+        // allows thread to continue accepting requests
+        this.RequestEntered += (_, _) => this._communicationHandle.Release();
+
+        // do handshake
+        await this.SendMessage(new InitMessage { PathSeparator = Path.PathSeparator });
+        IMessage ackMsg = await this._messageChannel.ReadMessageAsync();
+
+        if (ackMsg is not InitAckMessage acknowledgement)
+        {
+            throw new InvalidOperationException($"Expected InitAckMessage, got {ackMsg.Header}");
+        }
+
+        this.ServerFolder = acknowledgement.SharedFolderPath;
+        this.ServerPathSeparator = acknowledgement.PathSeparator;
+
+        // this is the point where we are "connected" (successfully connected to a trusted & funcitoning host)
+        this.Connected?.Invoke(host);
+        this.IsConnected = true;
+
+        while (!this._cancellationTokenSource.IsCancellationRequested)
+        {
+            bool tryAgainImmediately = false;
+            IMessage? message = this._messageChannel.ReadMessageIfAvailable();
+
+            while (message is not null)
+            {
+                await this.HandleServerMessage(message);
+                message = this._messageChannel.ReadMessageIfAvailable();
+            }
+
+            while (this._requests.TryDequeue(out ClientRequest request))
+            {
+                // always prioritize server messages over requests, since other messages could throw off
+                // certain flows/transactions used by the server
+                if (this._messageChannel.HasMessage())
+                {
+                    tryAgainImmediately = true;
+                    continue;
+                }
+
+                await this.HandleRequest(request);
+            }
+
+            // unset when a message/request is entered
+            if (!tryAgainImmediately)
+            {
+                await this._communicationHandle.WaitAsync();
+            }
+        }
     }
 
     private async Task SendMessage(IMessage message, CancellationToken ct = default)
     {
-        if (this._secureClient?.Channel is null) return;
-
+        if (this._messageChannel is null)
+        {
+            throw new InvalidOperationException("Message channel is not set - (should be) unreachable");
+        }
+        
         try
         {
-            MemoryStream stream = new();
-
-            // skip the size, write out the message, then go back to write the real size
-            // (means no extra copy)
-            stream.Seek(sizeof(uint), SeekOrigin.Begin);
-            FileTransferUtils.SendMessage(stream, message);
-            uint size = (uint)stream.Length - sizeof(uint);
-
-            stream.Seek(0, SeekOrigin.Begin);
-            await StreamIO.WriteUInt32Async(stream, size, ct);
-            
-            await this._secureClient.Channel.SendAsync(stream.ToArray(), ct);
+            await this._messageChannel.WriteMessageAsync(message, ct);
         }
         catch (Exception ex)
         {
-            await this.ForceDisconnect(ex, FatalError.IOError);
+            await this.CloseSessionAfterError(ex, FatalError.IOError);
             throw;
         }
     }
 
     private async Task ExpectAcknowledgement(MessageType type)
     {
-        if (this._secureClient?.Channel is null)
+        if (this._messageChannel is null)
         {
-            await this._cancellationTokenSource.CancelAsync();
-            throw new InvalidOperationException("cannot expect when disconnected");
+            throw new InvalidOperationException("Message channel is not set - (should be) unreachable");
         }
 
         try
         {
-            IMessage message = await this.WaitForMessage();
+            IMessage message = await this._messageChannel.ReadMessageAsync();
 
             if (message is not ControlAckMessage acknowledgement)
             {
@@ -263,7 +291,7 @@ public sealed class FileTransferClient : IDisposable
         }
         catch (Exception ex) when (ex is EndOfStreamException or IOException)
         {
-            await this.ForceDisconnect(ex, FatalError.IOError);
+            await this.CloseSessionAfterError(ex, FatalError.IOError);
         }
     }
 
@@ -366,34 +394,57 @@ public sealed class FileTransferClient : IDisposable
         }
     }
 
+    /// <summary>
+    ///     Instantly terminate a session and free all managed resources
+    /// </summary>
     private void Disconnect()
     {
+        this._selfCancel.Cancel();
+
+        this._messageChannel?.Dispose();
         this._secureClient?.Dispose();
-        this._secureClient = null;
         this._cancellationTokenSource.Cancel();
         this._cancellationTokenSource.Dispose();
         this.IsConnected = false;
     }
 
-    private void CloseAfterError(Exception ex) => this.CloseAfterError($"{ex.GetType()}: {ex.Message}");
+    /// <summary>
+    ///     Terminate a session and free all managed resources, then fire an event
+    /// </summary>
+    /// <param name="ex">the causing exception</param>
+    private void ForceDisconnect(Exception ex) => this.ForceDisconnect($"{ex.GetType()}: {ex.Message}");
 
-    private void CloseAfterError(string msg)
+    /// <summary>
+    ///     Terminate a session and free all managed resources, then fire an event
+    /// </summary>
+    /// <param name="msg">the message to send that explains this disconnection</param>
+    private void ForceDisconnect(string msg)
     {
         this.Disconnect();
         this.ForceDisconnected?.Invoke(msg);
     }
 
-    private async Task ForceDisconnect(Exception ex, FatalError errno) =>
-        await this.ForceDisconnect($"{ex.GetType()}: {ex.Message}", errno);
+    /// <summary>
+    ///     Close (send an error then terminate) the session
+    /// </summary>
+    /// <param name="ex">the causing exception</param>
+    /// <param name="errno">the error code to send</param>
+    private async Task CloseSessionAfterError(Exception ex, FatalError errno) =>
+        await this.CloseSessionAfterError($"{ex.GetType()}: {ex.Message}", errno);
 
-    private async Task ForceDisconnect(string msg, FatalError errno)
+    /// <summary>
+    ///     Close (send an error then terminate) the session
+    /// </summary>
+    /// <param name="msg">the message to send that explains this session close</param>
+    /// <param name="errno">the error code to send</param>
+    private async Task CloseSessionAfterError(string msg, FatalError errno)
     {
         if (this._secureClient?.Channel is not null) // true if connected + handshake completed before error
         {
             await this.SendMessage(new ErrorFatalMessage { Errno = errno });
         }
 
-        this.CloseAfterError(msg);
+        this.ForceDisconnect(msg);
     }
 
     private async Task HandleIncomingData(DataMessage data)

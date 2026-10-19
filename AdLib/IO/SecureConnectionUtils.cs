@@ -1,14 +1,12 @@
 using System;
 using System.IO;
 using System.Net.Sockets;
-using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
 
 using Microsoft.DevTunnels.Ssh.Algorithms;
-using Microsoft.DevTunnels.Ssh.Events;
 
 namespace AdLib.IO;
 

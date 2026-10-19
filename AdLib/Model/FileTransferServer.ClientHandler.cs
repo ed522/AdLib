@@ -11,16 +11,15 @@ namespace AdLib.Model;
 
 public sealed partial class FileTransferServer
 {
-    private sealed class ClientHandler : IDisposable
+    internal sealed class ClientHandler : IDisposable
     {
+        private readonly SecureConnection? _connection;
+        private readonly IMessageChannel _messageChannel;
+
         private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
-        private readonly SecureConnection _connection;
         private readonly string _rootPath;
         private readonly Random _random = new();
         private readonly SemaphoreSlim _communicationHandle = new(0);
-        private readonly Queue<IMessage> _messages = new();
-        private uint _currentExpectedSize;
-        private readonly MemoryStream _partialBuffer = new();
 
         private readonly CancellationToken _cancellationToken;
 
@@ -30,12 +29,39 @@ public sealed partial class FileTransferServer
         internal ClientHandler(
             ClientInfo info, SecureConnection connection, string rootPath,
             CancellationToken cancellationToken
+        ) : this(info, CreateMessageChannel(connection), connection, rootPath, cancellationToken)
+        {
+            // empty
+        }
+
+        /// <summary>
+        ///     Creates a handler around an already-established message channel, without performing any
+        ///     connection setup. Useful if the caller owns the connection/channel (for example, in tests).
+        /// </summary>
+        internal ClientHandler(
+            ClientInfo info, IMessageChannel messageChannel, string rootPath,
+            CancellationToken cancellationToken
+        ) : this(info, messageChannel, null, rootPath, cancellationToken)
+        {
+            // empty
+        }
+
+        private ClientHandler(
+            ClientInfo info, IMessageChannel messageChannel, SecureConnection? connection, string rootPath,
+            CancellationToken cancellationToken
         )
         {
             this.Info = info;
             this._connection = connection;
+            this._messageChannel = messageChannel;
             this._cancellationToken = cancellationToken;
             this._rootPath = rootPath;
+        }
+
+        private static IMessageChannel CreateMessageChannel(SecureConnection connection)
+        {
+            IDataBlockChannel blockChannel = new SshDataBlockChannel(connection.Channel);
+            return new BlockMessageChannel(blockChannel);
         }
 
         public ClientInfo Info { get; }
@@ -52,11 +78,16 @@ public sealed partial class FileTransferServer
             public required IMessage Message { get; init; }
         }
 
-        private event EventHandler<MessageReceivedEventArgs>? MessageReceived;
-
         public void Dispose()
         {
-            this._connection.Dispose();
+            if (this._connection is not null)
+            {
+                this._connection.Dispose();
+            }
+            else
+            {
+                this._messageChannel.Dispose();
+            }
 
             foreach ((string partPath, FileStream stream) in this._activeDownloads.Values)
             {
@@ -77,48 +108,15 @@ public sealed partial class FileTransferServer
         {
             try
             {
-                this._connection.Channel.DataReceived += (_, args) =>
-                {
-                    this._currentExpectedSize = FileTransferUtils.BufferMessage(
-                        this._currentExpectedSize,
-                        args.Array,
-                        this._partialBuffer,
-                        out IMessage? message
-                    );
-
-                    this._connection.Channel.AdjustWindow((uint)args.Array.Length);
-
-                    // not null on complete message, null while buffering
-                    if (message is not null)
-                    {
-                        this._messages.Enqueue(message);
-                        this.MessageReceived?.Invoke(this, new MessageReceivedEventArgs { Message = message });
-                    }
-                };
-
                 // allows thread to continue accepting messages once one comes in
-                this.MessageReceived += (_, _) => this._communicationHandle.Release();
+                this._messageChannel.MessageReceived += (_, _) => this._communicationHandle.Release();
 
-                IMessage msg = await this.WaitForMessage(this._cancellationToken);
-
-                if (msg is not InitMessage)
-                {
-                    throw new InvalidOperationException($"Expected InitMessage, got {msg.Header}");
-                }
-
-                // acknowledge
-                await this.SendMessage(
-                    new InitAckMessage
-                    {
-                        SharedFolderPath = this._rootPath,
-                    },
-                    this._cancellationToken
-                );
+                await this.ProcessHandshake();
 
                 while (!this._cancellationToken.IsCancellationRequested && !this._isDisconnected)
                 {
                     // the server never sends its own messages except as a consequence of a client's message
-                    while (this._messages.TryDequeue(out IMessage? message))
+                    while (this._messageChannel.TryReadMessageIfAvailable(out IMessage? message))
                     {
                         await this.HandleMessage(message, this._cancellationToken);
                     }
@@ -135,12 +133,7 @@ public sealed partial class FileTransferServer
                     CausingException = ex,
                 });
 
-                // separate variable for the event bc disconnection is only important for sending messages
-                if (!Interlocked.CompareExchange(ref this._hasRunDisconnect, true, false))
-                {
-                    this.Disconnected?.Invoke(this, new DisconnectedEventArgs());
-                }
-
+                // _isDisconnected is for messages, _hasRunDisconnect is for the event invocation
                 if (!this._isDisconnected)
                 {
                     this._isDisconnected = true;
@@ -153,8 +146,6 @@ public sealed partial class FileTransferServer
             }
             finally
             {
-                this._isDisconnected = true;
-
                 if (!Interlocked.CompareExchange(ref this._hasRunDisconnect, true, false))
                 {
                     this.Disconnected?.Invoke(this, new DisconnectedEventArgs());
@@ -164,119 +155,195 @@ public sealed partial class FileTransferServer
             }
         }
 
-        private async Task<IMessage> WaitForMessage(CancellationToken ct = default)
+        private async Task ProcessHandshake()
         {
-            if (this._messages.TryDequeue(out IMessage? immediate))
+            IMessage msg = await this._messageChannel.ReadMessageAsync(this._cancellationToken);
+
+            if (msg is not InitMessage)
             {
-                return immediate;
+                throw new InvalidOperationException($"Expected InitMessage, got {msg.Header}");
             }
 
-            TaskCompletionSource<IMessage> tcs = new();
-            EventHandler<MessageReceivedEventArgs> onReceived = (_, args) => { tcs.SetResult(args.Message); };
-
-            ct.Register(() => tcs.TrySetCanceled());
-
-            this.MessageReceived += onReceived;
-            IMessage message = await tcs.Task;
-            this.MessageReceived -= onReceived;
-            return message;
+            // acknowledge
+            await this.SendMessage(
+                new InitAckMessage
+                {
+                    SharedFolderPath = this._rootPath,
+                },
+                this._cancellationToken
+            );
         }
 
-        private async Task HandleMessage(IMessage message, CancellationToken ct = default)
+        internal async Task HandleMessage(IMessage message, CancellationToken ct = default)
         {
             switch (message)
             {
                 case FileRequestMessage request:
-                    await this.CheckPath(request.Path, ct);
-
-                    this.TransferStarting?.Invoke(this, new TransferStartingEventArgs
-                    {
-                        Path = request.Path,
-                        IsSending = true,
-                    });
-
-                    await FileTransferUtils.UploadPathAsync(request.Path, request.Path, this.SendMessage, ct);
-
-                    this.TransferFinished?.Invoke(this, new TransferFinishedEventArgs
-                    {
-                        Path = request.Path,
-                        IsSending = true,
-                    });
-
+                    await this.HandleFileRequestMessage(request, ct);
                     break;
 
                 case ListFilesMessage list:
-                    await this.CheckPath(list.Path, ct);
-                    await this.SendListing(list.Path, ct);
+                    await this.HandleListFilesMessage(list, ct);
                     break;
 
                 case DeleteMessage delete:
-                    await this.CheckPath(delete.Path, ct);
-
-                    if (File.Exists(delete.Path))
-                    {
-                        File.Delete(delete.Path);
-                    }
-                    else if (Directory.Exists(delete.Path))
-                    {
-                        Directory.Delete(delete.Path, true);
-                    }
-
-                    await this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.Delete }, ct);
+                    await this.HandleDeleteMessage(delete, ct);
                     break;
 
                 case MakeDirMessage makeDir:
-                    await this.CheckPath(makeDir.Path, ct);
-
-                    FileTransferUtils.CreateDirectory(makeDir.Path);
-                    await this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.MakeDir }, ct);
+                    await this.HandleMakeDirMessage(makeDir, ct);
                     break;
 
                 case DataMessage data:
-                    await this.CheckPath(data.Path, ct);
-
-                    if (!this._activeDownloads.ContainsKey(data.Path))
-                    {
-                        this.TransferStarting?.Invoke(this,
-                            new TransferStartingEventArgs { Path = data.Path, IsSending = false });
-                    }
-
-                    await FileTransferUtils.ProcessDownloadChunkAsync(data,
-                        this._activeDownloads,
-                        this._random,
-                        this.SendMessage,
-                        ct
-                    );
-
+                    await this.HandleDataMessage(data, ct);
                     break;
 
                 case DataFinishedMessage finished:
-                    await this.CheckPath(finished.Path, ct);
-                    FileTransferUtils.FinalizeDownload(finished.Path, this._activeDownloads);
-
-                    this.TransferFinished?.Invoke(this,
-                        new TransferFinishedEventArgs { Path = finished.Path, IsSending = false });
-
+                    await this.HandleDataFinishedMessage(finished, ct);
                     break;
 
                 case EndMessage:
-                    await this.SendMessage(new EndAckMessage(), ct);
-                    this._isDisconnected = true;
+                    await this.HandleEndMessage(ct);
                     break;
 
                 case StatusRequestMessage status:
-                    await this.SendMessage(new StatusResponseMessage { Random = status.Random }, ct);
+                    await this.HandleStatusRequestMessage(status, ct);
                     break;
 
                 case ResendRequestMessage resend:
-                    await this.CheckPath(resend.Path, ct);
-                    await FileTransferUtils.ResendBlockAsync(resend, this.SendMessage, ct);
+                    await this.HandleResendRequestMessage(resend, ct);
                     break;
 
                 default:
                     throw new CommunicationsException($"Did not expect message of type " +
                                                       $"{message.GetType()} at this point");
             }
+        }
+
+        private async Task HandleResendRequestMessage(ResendRequestMessage resend, CancellationToken ct = default)
+        {
+            await this.CheckPath(resend.Path, ct);
+            await FileTransferUtils.ResendBlockAsync(resend, this.SendMessage, ct);
+        }
+
+        private async Task HandleStatusRequestMessage(StatusRequestMessage status, CancellationToken ct = default)
+        {
+            await this.SendMessage(new StatusResponseMessage { Random = status.Random }, ct);
+        }
+
+        private async Task HandleEndMessage(CancellationToken ct)
+        {
+            await this.SendMessage(new EndAckMessage(), ct);
+            this._isDisconnected = true;
+        }
+
+        private async Task HandleDataFinishedMessage(DataFinishedMessage finished, CancellationToken ct = default)
+        {
+            await this.CheckPath(finished.Path, ct);
+            FileTransferUtils.FinalizeDownload(finished.Path, this._activeDownloads);
+
+            this.TransferFinished?.Invoke(this,
+                new TransferFinishedEventArgs { Path = finished.Path, IsSending = false });
+        }
+
+        private async Task HandleDataMessage(DataMessage data, CancellationToken ct = default)
+        {
+            await this.CheckPath(data.Path, ct);
+
+            if (!this._activeDownloads.ContainsKey(data.Path))
+            {
+                this.TransferStarting?.Invoke(this,
+                    new TransferStartingEventArgs { Path = data.Path, IsSending = false });
+            }
+
+            await FileTransferUtils.ProcessDownloadChunkAsync(data,
+                this._activeDownloads,
+                this._random,
+                this.SendMessage,
+                ct
+            );
+        }
+
+        private async Task HandleMakeDirMessage(MakeDirMessage makeDir, CancellationToken ct = default)
+        {
+            await this.CheckPath(makeDir.Path, ct);
+
+            FileTransferUtils.CreateDirectory(makeDir.Path);
+            await this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.MakeDir }, ct);
+        }
+
+        private async Task HandleDeleteMessage(DeleteMessage delete, CancellationToken ct = default)
+        {
+            await this.CheckPath(delete.Path, ct);
+
+            if (File.Exists(delete.Path))
+            {
+                File.Delete(delete.Path);
+            }
+            else if (Directory.Exists(delete.Path))
+            {
+                Directory.Delete(delete.Path, true);
+            }
+
+            await this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.Delete }, ct);
+        }
+
+        private async Task HandleListFilesMessage(ListFilesMessage list, CancellationToken ct = default)
+        {
+            await this.CheckPath(list.Path, ct);
+
+            if (!Directory.Exists(list.Path))
+            {
+                await this.SendMessage(new ErrorRecoverableMessage
+                {
+                    Errno = RecoverableError.ERRNO_NO_SUCH_FILE_OR_DIRECTORY,
+                }, ct);
+            }
+            else
+            {
+                string[] directories = Directory.GetDirectories(list.Path);
+                string[] files = Directory.GetFiles(list.Path);
+                FileEntry[] entries = new FileEntry[directories.Length + files.Length];
+
+                for (int i = 0; i < directories.Length; i++)
+                {
+                    entries[i] = new FileEntry
+                    {
+                        Name = Path.GetFileName(directories[i]),
+                        IsDirectory = true,
+                    };
+                }
+
+                for (int i = 0; i < files.Length; i++)
+                {
+                    entries[directories.Length + i] = new FileEntry
+                    {
+                        Name = Path.GetFileName(files[i]),
+                        IsDirectory = false,
+                    };
+                }
+
+                await this.SendMessage(new ListFilesResponseMessage { Path = list.Path, Files = entries }, ct);
+            }
+        }
+
+        private async Task HandleFileRequestMessage(FileRequestMessage request, CancellationToken ct = default)
+        {
+            await this.CheckPath(request.Path, ct);
+
+            this.TransferStarting?.Invoke(this, new TransferStartingEventArgs
+            {
+                Path = request.Path,
+                IsSending = true,
+            });
+
+            await FileTransferUtils.UploadPathAsync(request.Path, request.Path, this.SendMessage, ct);
+
+            this.TransferFinished?.Invoke(this, new TransferFinishedEventArgs
+            {
+                Path = request.Path,
+                IsSending = true,
+            });
         }
 
         /// <summary>
@@ -316,53 +383,23 @@ public sealed partial class FileTransferServer
             }
         }
 
-        private async Task SendMessage(IMessage message, CancellationToken ct = default)
+        internal async Task SendMessage(IMessage message, CancellationToken ct = default)
         {
-            MemoryStream stream = new();
-
-            // skip the size, write out the message, then go back to write the real size
-            // (means no extra copy)
-            stream.Seek(sizeof(uint), SeekOrigin.Begin);
-            FileTransferUtils.SendMessage(stream, message);
-            uint size = (uint)stream.Length - sizeof(uint);
-
-            stream.Seek(0, SeekOrigin.Begin);
-            await StreamIO.WriteUInt32Async(stream, size, ct);
-            
-            await this._connection.Channel.SendAsync(stream.ToArray(), ct);
-        }
-
-        private async Task SendListing(string path, CancellationToken ct = default)
-        {
-            if (!Directory.Exists(path))
+            try
             {
-                await this.SendMessage(new ListFilesResponseMessage { Path = path, Files = [] }, ct);
-                return;
+                await this._messageChannel.WriteMessageAsync(message, ct);
             }
-
-            string[] directories = Directory.GetDirectories(path);
-            string[] files = Directory.GetFiles(path);
-            FileEntry[] entries = new FileEntry[directories.Length + files.Length];
-
-            for (int i = 0; i < directories.Length; i++)
+            catch (Exception ex)
             {
-                entries[i] = new FileEntry
+                await this.SendMessage(new ErrorFatalMessage
                 {
-                    Name = Path.GetFileName(directories[i]),
-                    IsDirectory = true,
-                };
-            }
+                    Errno = FatalError.IOError,
+                }, this._cancellationToken);
 
-            for (int i = 0; i < files.Length; i++)
-            {
-                entries[directories.Length + i] = new FileEntry
-                {
-                    Name = Path.GetFileName(files[i]),
-                    IsDirectory = false,
-                };
-            }
+                await this._messageChannel.DisposeAsync();
 
-            await this.SendMessage(new ListFilesResponseMessage { Path = path, Files = entries }, ct);
+                throw;
+            }
         }
     }
 }
