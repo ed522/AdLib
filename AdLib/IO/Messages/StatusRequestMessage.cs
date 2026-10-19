@@ -1,12 +1,18 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct StatusRequestMessage : IMessage
+public class StatusRequestMessage : IMessage
 {
     public MessageType Header => MessageType.StatusRequest;
     public uint Random;
 
-    public void Serialize(Stream s) => StreamIO.WriteUInt32(s, this.Random);
-    public void Deserialize(Stream s) => this.Random = StreamIO.ReadUInt32(s);
+    public Span<byte> Serialize()
+    {
+        byte[] buffer = new byte[sizeof(uint)];
+        BufferIO.WriteUInt32(buffer, this.Random, out _);
+        return buffer;
+    }
+
+    public void Deserialize(ReadOnlySpan<byte> s) => this.Random = BufferIO.ReadUInt32(s, out _);
 }

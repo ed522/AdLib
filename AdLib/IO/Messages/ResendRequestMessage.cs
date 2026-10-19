@@ -1,22 +1,24 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct ResendRequestMessage : IMessage
+public class ResendRequestMessage : IMessage
 {
     public MessageType Header => MessageType.ResendRequest;
     public string Path;
     public ulong Offset;
 
-    public void Serialize(Stream stream)
+    public Span<byte> Serialize()
     {
-        StreamIO.WriteVarInt(stream, this.Offset);
-        StreamIO.WriteString(stream, this.Path);
+        Span<byte> buffer = new byte[BufferIO.GetStringLength(this.Path) + sizeof(ulong)];
+        BufferIO.WriteUInt64(buffer, this.Offset, out int index);
+        BufferIO.WriteString(buffer[index..], this.Path, out _);
+        return buffer;
     }
 
-    public void Deserialize(Stream stream)
+    public void Deserialize(ReadOnlySpan<byte> buffer)
     {
-        this.Offset = StreamIO.ReadVarInt(stream);
-        this.Path = StreamIO.ReadString(stream);
+        this.Offset = BufferIO.ReadUInt64(buffer, out int index);
+        this.Path = BufferIO.ReadString(buffer[index..], out _);
     }
 }

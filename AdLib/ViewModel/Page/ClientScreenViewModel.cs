@@ -201,7 +201,7 @@ public partial class ClientScreenViewModel : PageViewModel
             this.LoadLocalFiles
         );
 
-        this._transferClient = new FileTransferClient();
+        this._transferClient = new FileTransferClient(host, identity, globalStore.Combine(localStore));
         // TODO wait for client init to finish so we can actually get the server folder/path sep
         string serverFolder = this._transferClient.ServerFolder ?? "";
 

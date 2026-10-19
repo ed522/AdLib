@@ -1,29 +1,42 @@
 using System;
-using System.IO;
 
 namespace AdLib.IO.Messages;
 
-public struct DataMessage : IMessage
+public class DataMessage : IMessage
 {
     public MessageType Header => MessageType.Data;
     public string Path;
     public byte[] Data;
     public uint Crc32;
 
-    public void Serialize(Stream s)
+    public Span<byte> Serialize()
     {
-        StreamIO.WriteString(s, this.Path);
+        if (this.Data is null)
+        {
+            throw new InvalidOperationException("cannot write empty data block");
+        }
 
-        StreamIO.WriteBlock(s, this.Data ??
-                               throw new InvalidOperationException("cannot write empty data block"));
+        int length = BufferIO.GetStringLength(this.Path) + BufferIO.GetBlockLength(this.Data) + sizeof(uint);
+        Span<byte> buffer = new byte[length];
+        int index = 0;
 
-        StreamIO.WriteUInt32(s, this.Crc32);
+        BufferIO.WriteString(buffer[index..], this.Path, out int i);
+        index += i;
+        BufferIO.WriteBlock(buffer[index..], this.Data, out i);
+        index += i;
+        BufferIO.WriteUInt32(buffer[index..], this.Crc32, out _);
+
+        return buffer;
     }
 
-    public void Deserialize(Stream s)
+    public void Deserialize(ReadOnlySpan<byte> buffer)
     {
-        this.Path = StreamIO.ReadString(s);
-        this.Data = StreamIO.ReadBlock(s);
-        this.Crc32 = StreamIO.ReadUInt32(s);
+        int index = 0;
+
+        this.Path = BufferIO.ReadString(buffer[index..], out int i);
+        index += i;
+        this.Data = BufferIO.ReadBlock(buffer[index..], out i).ToArray();
+        index += i;
+        this.Crc32 = BufferIO.ReadUInt32(buffer[index..], out _);
     }
 }

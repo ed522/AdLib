@@ -1,22 +1,27 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct HashCheckMessage : IMessage
+public class HashCheckMessage : IMessage
 {
     public MessageType Header => MessageType.HashCheck;
     public string Path;
     public byte[] ExpectedHash; // 32 bytes
 
-    public void Serialize(Stream s)
+    private const int HashLength = 32;
+
+
+    public Span<byte> Serialize()
     {
-        StreamIO.WriteString(s, this.Path);
-        StreamIO.WriteFixed(s, this.ExpectedHash ?? new byte[32]);
+        byte[] buffer = new byte[BufferIO.GetStringLength(this.Path) + 32];
+        buffer.AsSpan()[..HashLength].CopyTo(this.ExpectedHash);
+        BufferIO.WriteString(buffer.AsSpan()[HashLength..], this.Path, out _);
+        return buffer;
     }
 
-    public void Deserialize(Stream s)
+    public void Deserialize(ReadOnlySpan<byte> buffer)
     {
-        this.Path = StreamIO.ReadString(s);
-        this.ExpectedHash = StreamIO.ReadFixed(s, 32);
+        this.ExpectedHash = buffer[..HashLength].ToArray();
+        this.Path = BufferIO.ReadString(buffer[HashLength..], out _);
     }
 }

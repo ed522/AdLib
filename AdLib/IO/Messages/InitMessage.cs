@@ -1,16 +1,12 @@
-using System.IO;
-using System.Text;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct InitMessage : IMessage
+public class InitMessage : IMessage
 {
     public MessageType Header => MessageType.Init;
     public char PathSeparator;
 
-    public void Serialize(Stream stream) =>
-        StreamIO.WriteSmallBlock(stream, Encoding.UTF8.GetBytes(this.PathSeparator.ToString()));
-
-    public void Deserialize(Stream stream) =>
-        this.PathSeparator = Encoding.UTF8.GetChars(StreamIO.ReadSmallBlock(stream))[0];
+    public Span<byte> Serialize() => new[] { (byte)this.PathSeparator };
+    public void Deserialize(ReadOnlySpan<byte> buffer) => this.PathSeparator = (char)buffer[0];
 }

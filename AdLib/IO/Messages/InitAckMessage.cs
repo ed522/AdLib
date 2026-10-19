@@ -1,23 +1,24 @@
-using System.IO;
-using System.Text;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct InitAckMessage : IMessage
+public class InitAckMessage : IMessage
 {
     public MessageType Header => MessageType.InitAck;
     public string SharedFolderPath;
     public char PathSeparator;
 
-    public void Serialize(Stream stream)
+    public Span<byte> Serialize()
     {
-        StreamIO.WriteString(stream, this.SharedFolderPath);
-        StreamIO.WriteSmallBlock(stream, Encoding.UTF8.GetBytes(this.PathSeparator.ToString()));
+        Span<byte> buffer = new byte[BufferIO.GetStringLength(this.SharedFolderPath) + 1];
+        buffer[0] = (byte)this.PathSeparator;
+        BufferIO.WriteString(buffer[1..], this.SharedFolderPath, out _);
+        return buffer;
     }
 
-    public void Deserialize(Stream stream)
+    public void Deserialize(ReadOnlySpan<byte> buffer)
     {
-        this.SharedFolderPath = StreamIO.ReadString(stream);
-        this.PathSeparator = Encoding.UTF8.GetChars(StreamIO.ReadSmallBlock(stream))[0];
+        this.PathSeparator = (char)buffer[0];
+        this.SharedFolderPath = BufferIO.ReadString(buffer[1..], out _);
     }
 }

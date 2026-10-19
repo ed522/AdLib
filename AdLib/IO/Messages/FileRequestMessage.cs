@@ -1,11 +1,18 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct FileRequestMessage : IMessage
+public class FileRequestMessage : IMessage
 {
     public MessageType Header => MessageType.FileRequest;
     public string Path;
-    public void Serialize(Stream stream) => StreamIO.WriteString(stream, this.Path);
-    public void Deserialize(Stream stream) => this.Path = StreamIO.ReadString(stream);
+
+    public Span<byte> Serialize()
+    {
+        byte[] buffer = new byte[BufferIO.GetStringLength(this.Path)];
+        BufferIO.WriteString(buffer, this.Path, out _);
+        return buffer;
+    }
+
+    public void Deserialize(ReadOnlySpan<byte> buffer) { this.Path = BufferIO.ReadString(buffer, out _); }
 }

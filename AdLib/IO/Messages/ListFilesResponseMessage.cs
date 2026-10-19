@@ -1,42 +1,58 @@
 using System;
-using System.IO;
 
 namespace AdLib.IO.Messages;
 
-public struct ListFilesResponseMessage : IMessage
+public class ListFilesResponseMessage : IMessage
 {
     public MessageType Header => MessageType.ListFilesResponse;
     public string Path;
     public FileEntry[] Files;
 
-    public void Serialize(Stream stream)
+    public Span<byte> Serialize()
     {
         if (this.Files is null)
         {
             throw new InvalidOperationException("Incomplete message");
         }
 
-        StreamIO.WriteString(stream, this.Path);
-        StreamIO.WriteVarInt(stream, (ulong)this.Files.Length);
+        int length = BufferIO.GetStringLength(this.Path) + sizeof(uint);
 
         foreach (FileEntry file in this.Files)
         {
-            stream.WriteByte(file.IsDirectory ? (byte)1 : (byte)0);
-            StreamIO.WriteString(stream, file.Name);
+            length += BufferIO.GetStringLength(file.Name) + 1;
         }
+
+        Span<byte> buffer = new byte[length];
+        int index = 0;
+
+        BufferIO.WriteString(buffer[index..], this.Path, out int i);
+        index += i;
+        index += BufferIO.WriteVarInt((uint)this.Files.Length, buffer[index..]);
+
+        foreach (FileEntry file in this.Files)
+        {
+            buffer[index++] = (byte)(file.IsDirectory ? 1 : 0);
+            BufferIO.WriteString(buffer[index..], file.Name, out i);
+            index += i;
+        }
+
+        return buffer;
     }
 
-    public void Deserialize(Stream stream)
+    public void Deserialize(ReadOnlySpan<byte> buffer)
     {
-        this.Path = StreamIO.ReadString(stream);
-        ulong length = StreamIO.ReadVarInt(stream);
-        this.Files = new FileEntry[length];
+        this.Path = BufferIO.ReadString(buffer, out int index);
+        uint fileCount = (uint)BufferIO.ReadVarInt(buffer[index..], out int i);
+        index += i;
+        this.Files = new FileEntry[fileCount];
 
-        for (uint i = 0; i < length; i++)
+        for (uint j = 0; j < fileCount; j++)
         {
-            bool isDirectory = stream.ReadByte() == 1;
-            string name = StreamIO.ReadString(stream);
-            this.Files[i] = new FileEntry { Name = name, IsDirectory = isDirectory };
+            this.Files[j] = new FileEntry
+            {
+                Name = BufferIO.ReadString(buffer[index..], out i),
+                IsDirectory = buffer[index++] != 0,
+            };
         }
     }
 }

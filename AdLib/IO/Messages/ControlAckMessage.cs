@@ -1,18 +1,22 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct ControlAckMessage : IMessage
+public class ControlAckMessage : IMessage
 {
     public MessageType Header => MessageType.ControlAck;
     public byte ControlCode;
 
-    public void Serialize(Stream s) => s.WriteByte(this.ControlCode);
-
-    public void Deserialize(Stream s)
+    public Span<byte> Serialize()
     {
-        int result = s.ReadByte();
-        if (result == -1) throw new EndOfStreamException();
-        this.ControlCode = (byte)result;
+        Span<byte> buffer = new byte[1];
+        buffer[0] = this.ControlCode;
+        return buffer;
+    }
+
+    public void Deserialize(ReadOnlySpan<byte> buffer)
+    {
+        if (buffer.Length < 1) throw new ArgumentException("Not enough data");
+        this.ControlCode = buffer[0];
     }
 }

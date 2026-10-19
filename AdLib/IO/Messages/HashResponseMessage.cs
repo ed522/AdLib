@@ -1,18 +1,16 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct HashResponseMessage : IMessage
+public class HashResponseMessage : IMessage
 {
     public MessageType Header => MessageType.HashResponse;
     public bool Status; // 0/1, correct/update needed
 
-    public void Serialize(Stream s) => s.WriteByte(this.Status ? (byte)1 : (byte)0);
+    public Span<byte> Serialize() => new[] { (byte)(this.Status ? 1 : 0) };
 
-    public void Deserialize(Stream s)
+    public void Deserialize(ReadOnlySpan<byte> buffer)
     {
-        int result = s.ReadByte();
-        if (result == -1) throw new EndOfStreamException();
-        this.Status = result != 0;
+        this.Status = buffer[0] != 0;
     }
 }

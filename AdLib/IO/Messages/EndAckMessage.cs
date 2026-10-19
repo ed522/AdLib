@@ -1,10 +1,10 @@
-using System.IO;
+using System;
 
 namespace AdLib.IO.Messages;
 
-public struct EndAckMessage : IMessage
+public class EndAckMessage : IMessage
 {
     public MessageType Header => MessageType.EndAck;
-    public void Serialize(Stream stream) { }
-    public void Deserialize(Stream stream) { }
+    public Span<byte> Serialize() => Span<byte>.Empty;
+    public void Deserialize(ReadOnlySpan<byte> _) { }
 }
