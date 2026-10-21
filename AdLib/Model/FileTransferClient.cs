@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
@@ -21,9 +20,8 @@ public sealed class FileTransferClient : IAsyncDisposable
         public required FileEntry[] Files { get; init; }
     }
 
-    private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
-    private readonly Random _random = new();
+    private readonly IFileSystemService _fileSystemService = new FileSystemService();
     private readonly ConcurrentQueue<ClientRequest> _requests = new();
     private readonly Task _thread;
     private readonly CancellationTokenSource _selfCancel = new();
@@ -33,7 +31,7 @@ public sealed class FileTransferClient : IAsyncDisposable
     private IMessageChannel? _messageChannel;
 
     private string _latestDownload = "";
-    
+
     public bool IsConnected { get; private set; }
     public string? ServerFolder { get; private set; }
     public char ServerPathSeparator { get; private set; }
@@ -41,16 +39,9 @@ public sealed class FileTransferClient : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await this._thread;
-        
+
         this._secureClient?.Dispose();
 
-        Task.WaitAll(this._activeDownloads.Values.Select(p => p.stream.DisposeAsync().AsTask()));
-        foreach ((string partPath, FileStream stream) download in this._activeDownloads.Values)
-        {
-            await download.stream.DisposeAsync();
-        }
-
-        this._activeDownloads.Clear();
         this._communicationHandle.Dispose();
 
         if (this._ownsMessageChannel)
@@ -82,7 +73,7 @@ public sealed class FileTransferClient : IAsyncDisposable
         {
             try
             {
-                IMessageChannel? messageChannel = await this.Connect(host, identity, store);
+                var messageChannel = await this.Connect(host, identity, store);
 
                 // authentication failed (or no connection could be made) - the relevant event was already raised
                 if (messageChannel is null)
@@ -116,11 +107,13 @@ public sealed class FileTransferClient : IAsyncDisposable
     ///     setup. Useful if the caller owns the connection/channel (for example, in tests).
     /// </summary>
     /// <param name="messageChannel">the channel messages are read from and written to</param>
+    /// <param name="service">an override for the file system handler</param>
     /// <param name="host">the host name reported to <see cref="Connected" />; informational only</param>
-    public FileTransferClient(IMessageChannel messageChannel, string host = "")
+    public FileTransferClient(IMessageChannel messageChannel, IFileSystemService? service = null, string host = "")
     {
         this._ownsMessageChannel = false;
         this._messageChannel = messageChannel;
+        this._fileSystemService = service ?? this._fileSystemService;
 
         this._thread = Task.Run(async () =>
         {
@@ -256,7 +249,7 @@ public sealed class FileTransferClient : IAsyncDisposable
         {
             throw new InvalidOperationException("Message channel is not set - (should be) unreachable");
         }
-        
+
         try
         {
             await this._messageChannel.WriteMessageAsync(message, ct);
@@ -304,7 +297,7 @@ public sealed class FileTransferClient : IAsyncDisposable
                 break;
 
             case ClientRequestType.GetPath:
-                await this.SendMessage(new FileRequestMessage { Path = request.Path });
+                await this.SendMessage(new FileRequestMessage { RemotePath = request.Path });
                 break;
 
             case ClientRequestType.DeleteRemotePath:
@@ -371,11 +364,11 @@ public sealed class FileTransferClient : IAsyncDisposable
                 break;
 
             case DataFinishedMessage finished:
-                this.FinalizeDownload(finished.Path);
+                this._fileSystemService.FinalizeDownload(finished.Path);
                 break;
 
             case MakeDirMessage makeDir:
-                FileTransferUtils.CreateDirectory(makeDir.Path);
+                this._fileSystemService.CreateDirectory(makeDir.Path);
                 break;
 
             case StatusRequestMessage status: // not used by server
@@ -383,7 +376,17 @@ public sealed class FileTransferClient : IAsyncDisposable
                 break;
 
             case ResendRequestMessage resend:
-                await FileTransferUtils.ResendBlockAsync(resend, this.SendMessage);
+                var block =
+                    await this._fileSystemService.ResendBlockAsync(resend.Path, resend.Offset);
+
+                await this.SendMessage(new DataMessage
+                {
+                    Path = block.Path,
+                    Data = block.Data,
+                    Offset = block.Offset,
+                    Crc32 = block.Crc32,
+                });
+
                 break;
 
             case ControlAckMessage ack: // will manually be expected
@@ -449,20 +452,82 @@ public sealed class FileTransferClient : IAsyncDisposable
 
     private async Task HandleIncomingData(DataMessage data)
     {
+        if (data.Path is null || data.Data is null)
+        {
+            throw new InvalidOperationException("Data message is missing path or data");
+        }
+
         if (this._latestDownload != data.Path)
         {
             this._latestDownload = data.Path;
             this.FileReceiving?.Invoke(data.Path);
         }
 
-        await FileTransferUtils.ProcessDownloadChunkAsync(data, this._activeDownloads, this._random, this.SendMessage);
-    }
+        var resend =
+            await this._fileSystemService.ProcessDownloadChunkAsync(
+                data.Path, data.Data, data.Offset, data.Crc32
+            );
 
-    private void FinalizeDownload(string path) { FileTransferUtils.FinalizeDownload(path, this._activeDownloads); }
+        if (resend is { } info)
+        {
+            await this.SendMessage(new ResendRequestMessage { Path = info.Path, Offset = info.Offset });
+        }
+    }
 
     private async Task UploadPath(string localPath, string remotePath)
     {
         this.FileSending?.Invoke(localPath);
-        await FileTransferUtils.UploadPathAsync(localPath, remotePath, this.SendMessage);
+
+        var dataChannel =
+            Channel.CreateBounded<IFileSystemService.DataBlock>(128);
+
+        var directoryChannel =
+            Channel.CreateBounded<IFileSystemService.PathInfo>(2048);
+
+        var uploadTask = this._fileSystemService.UploadPathAsync(
+            localPath, remotePath, dataChannel.Writer, directoryChannel.Writer
+        );
+
+        var directoryTask = this.SendDirectoriesAsync(directoryChannel.Reader);
+        var dataTask = this.SendDataBlocksAsync(dataChannel.Reader);
+
+        try
+        {
+            await uploadTask;
+        }
+        finally
+        {
+            dataChannel.Writer.TryComplete();
+            directoryChannel.Writer.TryComplete();
+
+            await Task.WhenAll(directoryTask, dataTask);
+        }
+    }
+
+    private async Task SendDirectoriesAsync(ChannelReader<IFileSystemService.PathInfo> reader)
+    {
+        await foreach (var info in reader.ReadAllAsync())
+        {
+            await this.SendMessage(new MakeDirMessage { Path = info.Path });
+        }
+    }
+
+    private async Task SendDataBlocksAsync(ChannelReader<IFileSystemService.DataBlock> reader)
+    {
+        await foreach (var block in reader.ReadAllAsync())
+        {
+            await this.SendMessage(new DataMessage
+            {
+                Path = block.Path,
+                Data = block.Data,
+                Offset = block.Offset,
+                Crc32 = block.Crc32,
+            });
+
+            if (block.IsLastBlock)
+            {
+                await this.SendMessage(new DataFinishedMessage { Path = block.Path });
+            }
+        }
     }
 }

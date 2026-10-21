@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using AdLib.IO;
@@ -16,9 +17,9 @@ public sealed partial class FileTransferServer
         private readonly SecureConnection? _connection;
         private readonly IMessageChannel _messageChannel;
 
-        private readonly Dictionary<string, (string partPath, FileStream stream)> _activeDownloads = [];
+        private readonly HashSet<string> _activeDownloads = [];
+        private readonly IFileSystemService _fileSystemService = new FileSystemService();
         private readonly string _rootPath;
-        private readonly Random _random = new();
         private readonly SemaphoreSlim _communicationHandle = new(0);
 
         private readonly CancellationToken _cancellationToken;
@@ -29,7 +30,7 @@ public sealed partial class FileTransferServer
         internal ClientHandler(
             ClientInfo info, SecureConnection connection, string rootPath,
             CancellationToken cancellationToken
-        ) : this(info, CreateMessageChannel(connection), connection, rootPath, cancellationToken)
+        ) : this(info, CreateMessageChannel(connection), connection, rootPath, null, cancellationToken)
         {
             // empty
         }
@@ -40,15 +41,15 @@ public sealed partial class FileTransferServer
         /// </summary>
         internal ClientHandler(
             ClientInfo info, IMessageChannel messageChannel, string rootPath,
-            CancellationToken cancellationToken
-        ) : this(info, messageChannel, null, rootPath, cancellationToken)
+            CancellationToken cancellationToken, IFileSystemService? fileSystemService = null
+        ) : this(info, messageChannel, null, rootPath, fileSystemService, cancellationToken)
         {
             // empty
         }
 
         private ClientHandler(
             ClientInfo info, IMessageChannel messageChannel, SecureConnection? connection, string rootPath,
-            CancellationToken cancellationToken
+            IFileSystemService? fileSystemService, CancellationToken cancellationToken
         )
         {
             this.Info = info;
@@ -56,13 +57,14 @@ public sealed partial class FileTransferServer
             this._messageChannel = messageChannel;
             this._cancellationToken = cancellationToken;
             this._rootPath = rootPath;
+
+            if (fileSystemService is not null)
+            {
+                this._fileSystemService = fileSystemService;
+            }
         }
 
-        private static IMessageChannel CreateMessageChannel(SecureConnection connection)
-        {
-            IDataBlockChannel blockChannel = new SshDataBlockChannel(connection.Channel);
-            return new BlockMessageChannel(blockChannel);
-        }
+        private static BlockMessageChannel CreateMessageChannel(SecureConnection connection) => new(new SshDataBlockChannel(connection.Channel));
 
         public ClientInfo Info { get; }
         public char ClientPathSeparator { get; private set; }
@@ -72,11 +74,6 @@ public sealed partial class FileTransferServer
         public event EventHandler<RecoverableErrorOccurredEventArgs>? RecoverableErrorOccurred;
         public event EventHandler<TransferStartingEventArgs>? TransferStarting;
         public event EventHandler<TransferFinishedEventArgs>? TransferFinished;
-
-        private class MessageReceivedEventArgs : EventArgs
-        {
-            public required IMessage Message { get; init; }
-        }
 
         public void Dispose()
         {
@@ -89,18 +86,12 @@ public sealed partial class FileTransferServer
                 this._messageChannel.Dispose();
             }
 
-            foreach ((string partPath, FileStream stream) in this._activeDownloads.Values)
-            {
-                stream.Dispose();
-                if (File.Exists(partPath)) File.Delete(partPath);
-            }
-
             this._activeDownloads.Clear();
         }
 
         public Task Start(CancellationToken ct = default)
         {
-            Task task = Task.Run(this.Run, ct);
+            var task = Task.Run(this.Run, ct);
             return task;
         }
 
@@ -223,7 +214,15 @@ public sealed partial class FileTransferServer
         private async Task HandleResendRequestMessage(ResendRequestMessage resend, CancellationToken ct = default)
         {
             await this.CheckPath(resend.Path, ct);
-            await FileTransferUtils.ResendBlockAsync(resend, this.SendMessage, ct);
+            var block = await this._fileSystemService.ResendBlockAsync(resend.Path, resend.Offset, ct);
+
+            await this.SendMessage(new DataMessage
+            {
+                Path = block.Path,
+                Data = block.Data,
+                Offset = block.Offset,
+                Crc32 = block.Crc32,
+            }, ct);
         }
 
         private async Task HandleStatusRequestMessage(StatusRequestMessage status, CancellationToken ct = default)
@@ -240,7 +239,8 @@ public sealed partial class FileTransferServer
         private async Task HandleDataFinishedMessage(DataFinishedMessage finished, CancellationToken ct = default)
         {
             await this.CheckPath(finished.Path, ct);
-            FileTransferUtils.FinalizeDownload(finished.Path, this._activeDownloads);
+            this._fileSystemService.FinalizeDownload(finished.Path);
+            this._activeDownloads.Remove(finished.Path);
 
             this.TransferFinished?.Invoke(this,
                 new TransferFinishedEventArgs { Path = finished.Path, IsSending = false });
@@ -248,27 +248,33 @@ public sealed partial class FileTransferServer
 
         private async Task HandleDataMessage(DataMessage data, CancellationToken ct = default)
         {
+            if (data.Path is null || data.Data is null)
+            {
+                throw new InvalidOperationException("Data message is missing path or data");
+            }
+            
             await this.CheckPath(data.Path, ct);
 
-            if (!this._activeDownloads.ContainsKey(data.Path))
+            if (this._activeDownloads.Add(data.Path))
             {
                 this.TransferStarting?.Invoke(this,
                     new TransferStartingEventArgs { Path = data.Path, IsSending = false });
             }
 
-            await FileTransferUtils.ProcessDownloadChunkAsync(data,
-                this._activeDownloads,
-                this._random,
-                this.SendMessage,
-                ct
-            );
+            var resend = await this._fileSystemService
+                                   .ProcessDownloadChunkAsync(data.Path, data.Data, data.Offset, data.Crc32, ct);
+
+            if (resend is { } info)
+            {
+                await this.SendMessage(new ResendRequestMessage { Path = info.Path, Offset = info.Offset }, ct);
+            }
         }
 
         private async Task HandleMakeDirMessage(MakeDirMessage makeDir, CancellationToken ct = default)
         {
             await this.CheckPath(makeDir.Path, ct);
 
-            FileTransferUtils.CreateDirectory(makeDir.Path);
+            this._fileSystemService.CreateDirectory(makeDir.Path);
             await this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.MakeDir }, ct);
         }
 
@@ -276,14 +282,7 @@ public sealed partial class FileTransferServer
         {
             await this.CheckPath(delete.Path, ct);
 
-            if (File.Exists(delete.Path))
-            {
-                File.Delete(delete.Path);
-            }
-            else if (Directory.Exists(delete.Path))
-            {
-                Directory.Delete(delete.Path, true);
-            }
+            this._fileSystemService.Delete(delete.Path);
 
             await this.SendMessage(new ControlAckMessage { ControlCode = (byte)MessageType.Delete }, ct);
         }
@@ -329,21 +328,75 @@ public sealed partial class FileTransferServer
 
         private async Task HandleFileRequestMessage(FileRequestMessage request, CancellationToken ct = default)
         {
-            await this.CheckPath(request.Path, ct);
+            await this.CheckPath(request.RemotePath, ct);
 
             this.TransferStarting?.Invoke(this, new TransferStartingEventArgs
             {
-                Path = request.Path,
+                Path = request.RemotePath,
                 IsSending = true,
             });
 
-            await FileTransferUtils.UploadPathAsync(request.Path, request.Path, this.SendMessage, ct);
+            var dataChannel =
+                Channel.CreateBounded<IFileSystemService.DataBlock>(128);
+
+            var directoryChannel =
+                Channel.CreateBounded<IFileSystemService.PathInfo>(2048);
+
+            var uploadTask = this._fileSystemService.UploadPathAsync(
+                request.RemotePath, request.DestinationPath, dataChannel.Writer, directoryChannel.Writer, ct
+            );
+
+            var directoryTask = this.SendDirectoriesAsync(directoryChannel.Reader, ct);
+            var dataTask = this.SendDataBlocksAsync(dataChannel.Reader, ct);
+
+            try
+            {
+                await uploadTask;
+            }
+            finally
+            {
+                dataChannel.Writer.TryComplete();
+                directoryChannel.Writer.TryComplete();
+
+                await Task.WhenAll(directoryTask, dataTask);
+            }
 
             this.TransferFinished?.Invoke(this, new TransferFinishedEventArgs
             {
-                Path = request.Path,
+                Path = request.RemotePath,
                 IsSending = true,
             });
+        }
+
+        private async Task SendDirectoriesAsync(
+            ChannelReader<IFileSystemService.PathInfo> reader, CancellationToken ct
+        )
+        {
+            await foreach (var info in reader.ReadAllAsync(ct))
+            {
+                await this.SendMessage(new MakeDirMessage { Path = info.Path }, ct);
+            }
+        }
+
+        private async Task SendDataBlocksAsync(
+            ChannelReader<IFileSystemService.DataBlock> reader, CancellationToken ct
+        )
+        {
+            await foreach (var block in reader.ReadAllAsync(ct))
+            {
+                await this.SendMessage(new DataMessage
+                {
+                    Path = block.Path,
+                    Data = block.Data,
+                    Offset = block.Offset,
+                    Crc32 = block.Crc32,
+                }, ct);
+
+                if (block.IsLastBlock)
+                {
+                    await this.SendMessage(new DataFinishedMessage { Path = block.Path }, ct);
+                }
+            }
         }
 
         /// <summary>
@@ -389,7 +442,7 @@ public sealed partial class FileTransferServer
             {
                 await this._messageChannel.WriteMessageAsync(message, ct);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await this.SendMessage(new ErrorFatalMessage
                 {
@@ -397,6 +450,7 @@ public sealed partial class FileTransferServer
                 }, this._cancellationToken);
 
                 await this._messageChannel.DisposeAsync();
+                this.Dispose();
 
                 throw;
             }

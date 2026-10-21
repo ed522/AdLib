@@ -97,7 +97,7 @@ public static class BufferIO
         destination[5] = (byte)((value >> 16) & 0xFF);
         destination[6] = (byte)((value >> 8) & 0xFF);
         destination[7] = (byte)(value & 0xFF);
-        length = sizeof(uint);
+        length = sizeof(ulong);
     }
 
     public static ulong ReadUInt64(ReadOnlySpan<byte> source, out int length)
