@@ -10,8 +10,7 @@ namespace AdLib.Identities;
 public sealed class PublicKeyInfo
 {
     public const string FileExtension = ".adc";
-    private static readonly HashAlgorithm HashAlgorithm = SHA256.Create();
-    public static int FingerprintLength => HashAlgorithm.HashSize / 8;
+    public static int FingerprintLength => SHA256.HashSizeInBytes;
 
     public required Guid InternalName { get; init; }
     public required string FriendlyName { get; init; }
@@ -39,7 +38,7 @@ public sealed class PublicKeyInfo
 
     public static void GetCanonicalFingerprint(IKeyPair key, Span<byte> output)
     {
-        HashAlgorithm.TryComputeHash(key.GetPublicKeyBytes().Span, output, out _);
+        SHA256.TryHashData(key.GetPublicKeyBytes().Span, output, out _);
     }
 
     public bool Equals(PublicKeyInfo? other)
