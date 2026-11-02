@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using AdLib.Identities;
 using AdLib.IO;
-
-using Microsoft.DevTunnels.Ssh.Algorithms;
 
 namespace AdLib.Model;
 
@@ -66,8 +65,107 @@ public sealed partial class FileTransferServer : IDisposable
     /// </summary>
     public event SecureConnectionUtils.AuthenticationErrorHandler? AuthenticationError;
 
-    public async Task Start(Identity identity, TrustStore store, string sharedPath)
+    private async Task ListenForNetworkClients(
+        ChannelWriter<ClientInfo> clientInfoWriter, Identity identity, TrustStore store,
+        CancellationToken token = default
+    )
     {
+        while (!token.IsCancellationRequested)
+        {
+            this._tlsServer = new SecureServer(identity, store);
+            this._tlsServer.Start();
+
+            // threaded so async is useless
+            var connectionInfo = await this._tlsServer.AcceptClientAsync(token);
+
+            // client disposes connection in its Dispose, and that's called on thread exit
+            var connection = connectionInfo.Connection;
+
+            string host = connectionInfo.Hostname;
+            var result = connectionInfo.Result;
+            var reason = connectionInfo.Reason;
+            var publicKey = connectionInfo.PublicKey;
+            PublicKeyInfo? publicKeyInfo;
+
+            if (publicKey is not null)
+            {
+                publicKeyInfo = store.FindPublicKeyOrDefault(publicKey);
+            }
+            else
+            {
+                publicKeyInfo = null;
+            }
+
+            // did the authentication fail?
+            // ConnectionResult holds the local auth result (against remote host), RejectionReason is
+            // for remote auth (remote host checking our cert)
+
+            if (result != SecureConnectionUtils.ConnectionResult.Success ||
+                reason != SecureConnectionUtils.RejectionReason.None)
+            {
+                // subscribers will handle both remote rejections (reason) and
+                // local rejections (result)
+                this.AuthenticationError?.Invoke(host, publicKeyInfo, publicKey, result, reason);
+                continue;
+            }
+
+            if (connection is null)
+            {
+                continue; // failed to connect
+            }
+
+            if (publicKeyInfo is null)
+            {
+                clientInfoWriter.TryComplete();
+
+                throw new InvalidOperationException(
+                    "Connection returned a null public key even though authentication succeeded - this is a bug");
+            }
+
+            // should be value-unique (but since this is a reference type, even if the same client
+            // connects twice with the same identity for some reason, it will still be not equal)
+            ClientInfo clientInfo = new()
+            {
+                RemoteEndPoint = host,
+                PublicKeyInfo = publicKeyInfo,
+                MessageChannel = CreateMessageChannel(connection),
+            };
+
+            await clientInfoWriter.WriteAsync(clientInfo, token);
+        }
+    }
+
+    private static BlockMessageChannel CreateMessageChannel(SecureConnection connection) =>
+        new(new SshDataBlockChannel(connection.Channel));
+
+    public async Task Start(
+        Identity identity, TrustStore store, string sharedPath, ChannelReader<ClientInfo>? clientInfoSupplier = null,
+        CancellationToken token = default
+    )
+    {
+        if (token != CancellationToken.None)
+        {
+            token = CancellationTokenSource.CreateLinkedTokenSource(this._cancellationTokenSource.Token, token).Token;
+        }
+        else
+        {
+            token = this._cancellationTokenSource.Token;
+        }
+
+        var networkListener = Task.CompletedTask;
+        CancellationTokenSource? networkListenerCancellation = null;
+
+        if (clientInfoSupplier is null)
+        {
+            var channel = Channel.CreateUnbounded<ClientInfo>();
+            clientInfoSupplier = channel.Reader;
+            networkListenerCancellation = new CancellationTokenSource();
+            token.Register(networkListenerCancellation.Cancel);
+
+            networkListener
+                = this.ListenForNetworkClients(channel.Writer, identity, store, networkListenerCancellation.Token);
+        }
+
         this._rootPath = Path.GetFullPath(sharedPath);
 
         if (!Directory.Exists(this._rootPath))
@@ -76,71 +174,19 @@ public sealed partial class FileTransferServer : IDisposable
         }
 
         // server setup
-        this._tlsServer = new SecureServer(identity, store);
-        this._tlsServer.Start();
 
         // define + start thread - since we hold a cancellation token we don't need to worry about keeping
         // references to stop it
         // ClientHandler is threaded so this can handle multiple at once
-        Task listenerTask = Task.Run(async () =>
+        var listenerTask = Task.Run(async () =>
         {
             // keep accepting clients until the server is stopped
-            while (!this._cancellationTokenSource.Token.IsCancellationRequested)
+            while (!token.IsCancellationRequested && await clientInfoSupplier.WaitToReadAsync(token))
             {
                 try
                 {
-                    // threaded so async is useless
-                    SecureConnectionUtils.ConnectionInfo connectionInfo = await this._tlsServer.AcceptClientAsync();
-
-                    // client disposes connection in its Dispose, and that's called on thread exit
-                    SecureConnection? connection = connectionInfo.Connection;
-
-                    string host = connectionInfo.Hostname;
-                    SecureConnectionUtils.ConnectionResult result = connectionInfo.Result;
-                    SecureConnectionUtils.RejectionReason reason = connectionInfo.Reason;
-                    IKeyPair? publicKey = connectionInfo.PublicKey;
-                    PublicKeyInfo? publicKeyInfo;
-
-                    if (publicKey is not null)
-                    {
-                        publicKeyInfo = store.FindPublicKeyOrDefault(publicKey);
-                    }
-                    else
-                    {
-                        publicKeyInfo = null;
-                    }
-
-                    // did the authentication fail?
-                    // ConnectionResult holds the local auth result (against remote host), RejectionReason is
-                    // for remote auth (remote host checking our cert)
-
-                    if (result != SecureConnectionUtils.ConnectionResult.Success ||
-                        reason != SecureConnectionUtils.RejectionReason.None)
-                    {
-                        // subscribers will handle both remote rejections (reason) and
-                        // local rejections (result)
-                        this.AuthenticationError?.Invoke(host, publicKeyInfo, publicKey, result, reason);
-                        continue;
-                    }
-
-                    if (connection is null)
-                    {
-                        continue; // failed to connect
-                    }
-
-                    // should be value-unique (but since this is a reference type, even if the same client
-                    // connects twice with the same identity for some reason, it will still be not equal)
-                    ClientInfo clientInfo = new()
-                    {
-                        RemoteEndPoint = host,
-                        PublicKeyInfo = publicKeyInfo ??
-                                        throw new InvalidOperationException("Connection returned a null public key " +
-                                                                            "even though authentication succeeded - " +
-                                                                            "this is a bug"),
-                    };
-
-                    ClientHandler handler = new(clientInfo, connection, this._rootPath,
-                        this._cancellationTokenSource.Token);
+                    var clientInfo = await clientInfoSupplier.ReadAsync(token);
+                    ClientHandler handler = new(clientInfo, this._rootPath, token);
 
                     // forward all events to our subscribers (but give them the client info)
 
@@ -210,10 +256,16 @@ public sealed partial class FileTransferServer : IDisposable
                     // kill thread - this means the entire server was killed
                     return;
                 }
+                finally
+                {
+                    networkListenerCancellation?.Cancel();
+                }
             }
-        });
 
-        await listenerTask;
+            networkListenerCancellation?.Cancel();
+        }, token);
+
+        await Task.WhenAll(listenerTask, networkListener);
     }
 
     public void Stop()
@@ -223,7 +275,7 @@ public sealed partial class FileTransferServer : IDisposable
 
         lock (this._clientsLock)
         {
-            foreach (ClientHandler client in this._clients)
+            foreach (var client in this._clients)
             {
                 client.Dispose();
             }

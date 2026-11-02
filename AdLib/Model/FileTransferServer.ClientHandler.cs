@@ -27,34 +27,26 @@ public sealed partial class FileTransferServer
         private bool _isDisconnected;
         private bool _hasRunDisconnect;
 
-        internal ClientHandler(
-            ClientInfo info, SecureConnection connection, string rootPath,
-            CancellationToken cancellationToken
-        ) : this(info, CreateMessageChannel(connection), connection, rootPath, null, cancellationToken)
-        {
-            // empty
-        }
-
         /// <summary>
         ///     Creates a handler around an already-established message channel, without performing any
         ///     connection setup. Useful if the caller owns the connection/channel (for example, in tests).
         /// </summary>
         internal ClientHandler(
-            ClientInfo info, IMessageChannel messageChannel, string rootPath,
-            CancellationToken cancellationToken, IFileSystemService? fileSystemService = null
-        ) : this(info, messageChannel, null, rootPath, fileSystemService, cancellationToken)
+            ClientInfo info, string rootPath, CancellationToken cancellationToken,
+            IFileSystemService? fileSystemService = null
+        ) : this(info, null, rootPath, fileSystemService, cancellationToken)
         {
             // empty
         }
 
         private ClientHandler(
-            ClientInfo info, IMessageChannel messageChannel, SecureConnection? connection, string rootPath,
+            ClientInfo info, SecureConnection? connection, string rootPath,
             IFileSystemService? fileSystemService, CancellationToken cancellationToken
         )
         {
             this.Info = info;
             this._connection = connection;
-            this._messageChannel = messageChannel;
+            this._messageChannel = info.MessageChannel;
             this._cancellationToken = cancellationToken;
             this._rootPath = rootPath;
 
@@ -63,8 +55,6 @@ public sealed partial class FileTransferServer
                 this._fileSystemService = fileSystemService;
             }
         }
-
-        private static BlockMessageChannel CreateMessageChannel(SecureConnection connection) => new(new SshDataBlockChannel(connection.Channel));
 
         public ClientInfo Info { get; }
         public char ClientPathSeparator { get; private set; }
@@ -89,9 +79,9 @@ public sealed partial class FileTransferServer
             this._activeDownloads.Clear();
         }
 
-        public Task Start(CancellationToken ct = default)
+        public Task Start()
         {
-            var task = Task.Run(this.Run, ct);
+            var task = Task.Run(this.Run, this._cancellationToken);
             return task;
         }
 
@@ -165,7 +155,7 @@ public sealed partial class FileTransferServer
             );
         }
 
-        internal async Task HandleMessage(IMessage message, CancellationToken ct = default)
+        private async Task HandleMessage(IMessage message, CancellationToken ct = default)
         {
             switch (message)
             {
@@ -436,7 +426,7 @@ public sealed partial class FileTransferServer
             }
         }
 
-        internal async Task SendMessage(IMessage message, CancellationToken ct = default)
+        private async Task SendMessage(IMessage message, CancellationToken ct = default)
         {
             try
             {

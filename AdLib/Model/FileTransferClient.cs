@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 using System.Threading.Channels;
@@ -22,11 +21,13 @@ public sealed class FileTransferClient : IAsyncDisposable
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly IFileSystemService _fileSystemService = new FileSystemService();
-    private readonly ConcurrentQueue<ClientRequest> _requests = new();
-    private readonly Task _thread;
+    private readonly Channel<ClientRequest> _requestChannel = Channel.CreateUnbounded<ClientRequest>();
+    private readonly Channel<IMessage> _serverChannel = Channel.CreateUnbounded<IMessage>();
     private readonly CancellationTokenSource _selfCancel = new();
+    private Task? _messageTask;
+    private Task? _requestTask;
 
-    private readonly bool _ownsMessageChannel;
+    private bool _ownsMessageChannel;
     private SecureClient? _secureClient;
     private IMessageChannel? _messageChannel;
 
@@ -38,7 +39,11 @@ public sealed class FileTransferClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await this._thread;
+        this._requestChannel.Writer.TryComplete();
+        this._serverChannel.Writer.TryComplete();
+
+        await (this._requestTask ?? Task.CompletedTask);
+        await (this._messageTask ?? Task.CompletedTask);
 
         this._secureClient?.Dispose();
 
@@ -65,41 +70,36 @@ public sealed class FileTransferClient : IAsyncDisposable
 
     private event EventHandler<EventArgs<ClientRequest>>? RequestEntered;
 
-    public FileTransferClient(string host, Identity identity, TrustStore store)
+    public FileTransferClient(IFileSystemService? service = null) => this._fileSystemService = service ?? this._fileSystemService;
+
+    public async Task Initialize(string host, Identity identity, TrustStore store)
     {
-        this._ownsMessageChannel = true;
-
-        this._thread = Task.Run(async () =>
+        try
         {
-            try
-            {
-                var messageChannel = await this.Connect(host, identity, store);
+            var messageChannel = await this.Connect(host, identity, store);
+            this._ownsMessageChannel = true;
 
-                // authentication failed (or no connection could be made) - the relevant event was already raised
-                if (messageChannel is null)
-                {
-                    return;
-                }
-                else
-                {
-                    this._messageChannel = messageChannel;
-                }
+            // authentication failed (or no connection could be made) - the relevant event was already raised
+            if (messageChannel is null)
+            {
+                return;
+            }
 
-                await this.Listen(messageChannel, host);
-            }
-            catch (Exception e) when (e is TaskCanceledException or OperationCanceledException
-                                          or AggregateException
-                                          {
-                                              InnerException: TaskCanceledException or OperationCanceledException,
-                                          })
-            {
-                // ignore cancellations
-            }
-            finally
-            {
-                this.Disconnect(); // does not fire events nor send messages, also frees managed resources
-            }
-        }, this._selfCancel.Token);
+            this._messageChannel = messageChannel;
+
+            await this.Connect(messageChannel, host);
+        }
+        catch (Exception e) when (e is TaskCanceledException or OperationCanceledException
+                                      or AggregateException
+                                      {
+                                          InnerException: TaskCanceledException or OperationCanceledException,
+                                      })
+        {
+            // ignore cancellations
+        }
+
+        this._messageTask = this.ListenForMessages();
+        this._requestTask = this.ListenForRequests();
     }
 
     /// <summary>
@@ -109,31 +109,26 @@ public sealed class FileTransferClient : IAsyncDisposable
     /// <param name="messageChannel">the channel messages are read from and written to</param>
     /// <param name="service">an override for the file system handler</param>
     /// <param name="host">the host name reported to <see cref="Connected" />; informational only</param>
-    public FileTransferClient(IMessageChannel messageChannel, IFileSystemService? service = null, string host = "")
+    public async Task Initialize(IMessageChannel messageChannel, string host = "")
     {
         this._ownsMessageChannel = false;
         this._messageChannel = messageChannel;
-        this._fileSystemService = service ?? this._fileSystemService;
 
-        this._thread = Task.Run(async () =>
+        try
         {
-            try
-            {
-                await this.Listen(messageChannel, host);
-            }
-            catch (Exception e) when (e is TaskCanceledException or OperationCanceledException
-                                          or AggregateException
-                                          {
-                                              InnerException: TaskCanceledException or OperationCanceledException,
-                                          })
-            {
-                // ignore cancellations
-            }
-            finally
-            {
-                this.Disconnect();
-            }
-        }, this._selfCancel.Token);
+            await this.Connect(messageChannel, host);
+        }
+        catch (Exception e) when (e is TaskCanceledException or OperationCanceledException
+                                      or AggregateException
+                                      {
+                                          InnerException: TaskCanceledException or OperationCanceledException,
+                                      })
+        {
+            // ignore cancellations
+        }
+
+        this._messageTask = this.ListenForMessages();
+        this._requestTask = this.ListenForRequests();
     }
 
     /// <summary>
@@ -183,17 +178,30 @@ public sealed class FileTransferClient : IAsyncDisposable
 
     public void AddRequest(ClientRequest request)
     {
-        this._requests.Enqueue(request);
+        this._requestChannel.Writer.TryWrite(request);
         this.RequestEntered?.Invoke(this, new EventArgs<ClientRequest> { Value = request });
     }
 
-    private async Task Listen(IMessageChannel messageChannel, string host)
+    private async Task Connect(IMessageChannel messageChannel, string host)
     {
         this._messageChannel = messageChannel;
-        this._messageChannel.MessageReceived += (_, _) => this._communicationHandle.Release();
+
+        this._messageChannel.MessageReceived += (_, _) =>
+        {
+            if (this._communicationHandle.CurrentCount == 0)
+            {
+                this._communicationHandle.Release();
+            }
+        };
 
         // allows thread to continue accepting requests
-        this.RequestEntered += (_, _) => this._communicationHandle.Release();
+        this.RequestEntered += (_, _) =>
+        {
+            if (this._communicationHandle.CurrentCount == 0)
+            {
+                this._communicationHandle.Release();
+            }
+        };
 
         // do handshake
         await this.SendMessage(new InitMessage { PathSeparator = Path.PathSeparator });
@@ -210,36 +218,21 @@ public sealed class FileTransferClient : IAsyncDisposable
         // this is the point where we are "connected" (successfully connected to a trusted & funcitoning host)
         this.Connected?.Invoke(host);
         this.IsConnected = true;
+    }
 
-        while (!this._cancellationTokenSource.IsCancellationRequested)
+    private async Task ListenForMessages()
+    {
+        await foreach (var message in this._serverChannel.Reader.ReadAllAsync())
         {
-            bool tryAgainImmediately = false;
-            IMessage? message = this._messageChannel.ReadMessageIfAvailable();
+            await this.HandleServerMessage(message);
+        }
+    }
 
-            while (message is not null)
-            {
-                await this.HandleServerMessage(message);
-                message = this._messageChannel.ReadMessageIfAvailable();
-            }
-
-            while (this._requests.TryDequeue(out ClientRequest request))
-            {
-                // always prioritize server messages over requests, since other messages could throw off
-                // certain flows/transactions used by the server
-                if (this._messageChannel.HasMessage())
-                {
-                    tryAgainImmediately = true;
-                    continue;
-                }
-
-                await this.HandleRequest(request);
-            }
-
-            // unset when a message/request is entered
-            if (!tryAgainImmediately)
-            {
-                await this._communicationHandle.WaitAsync();
-            }
+    private async Task ListenForRequests()
+    {
+        await foreach (var request in this._requestChannel.Reader.ReadAllAsync())
+        {
+            await this.HandleRequest(request);
         }
     }
 
