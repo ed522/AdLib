@@ -15,16 +15,14 @@ public static class BufferIO
     /// <returns>The resulting number's length in bytes.</returns>
     public static int WriteVarInt(ulong value, Span<byte> buffer)
     {
-        if (buffer.Length < 10) throw new ArgumentException("Buffer too small", nameof(buffer));
         int count = 0;
 
-        // never falls through - should always break (otherwise the entire
-        // number has continuation bits set, which would break it)
-        for (int i = 0; i < buffer.Length; i++)
+        // a 64-bit value needs at most 10 bytes, but any buffer large enough
+        // to hold this particular value is acceptable
+        for (; count < buffer.Length; count++)
         {
             // add value
-            buffer[i] = (byte)(value & 0x7F);
-            count++;
+            buffer[count] = (byte)(value & 0x7F);
 
             // set MSB if there's more to come
             value >>= 7;
@@ -32,15 +30,15 @@ public static class BufferIO
             // operates on updated value
             if (value != 0)
             {
-                buffer[i] |= 0x80; // go back again
+                buffer[count] |= 0x80; // go back again
             }
             else
             {
-                break;
+                return count + 1;
             }
         }
 
-        return count;
+        throw new ArgumentException("Buffer too small", nameof(buffer));
     }
 
     public static ulong ReadVarInt(ReadOnlySpan<byte> bits, out int length)
