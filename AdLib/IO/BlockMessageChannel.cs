@@ -88,14 +88,21 @@ public sealed class BlockMessageChannel : IMessageChannel
     public IMessage? ReadMessageIfAvailable()
     {
         byte[]? data = this._channel.GetBlockImmediately();
+
+        while (data is not null && data.Length == 0)
+        {
+            data = this._channel.GetBlockImmediately();
+        }
+        
         if (data is null) return null;
+        
         return ReadMessage(data);
     }
 
     public IMessage? ReadMessageIfAvailable(int timeout)
     {
         byte[]? data = this._channel.GetBlock(timeout);
-        if (data is null) return null;
+        if (data is null || data.Length == 0) return null;
         return ReadMessage(data);
     }
 

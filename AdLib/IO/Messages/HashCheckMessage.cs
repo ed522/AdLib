@@ -14,7 +14,7 @@ public class HashCheckMessage : IMessage
     public Span<byte> Serialize()
     {
         byte[] buffer = new byte[BufferIO.GetStringLength(this.Path) + 32];
-        buffer.AsSpan()[..HashLength].CopyTo(this.ExpectedHash);
+        this.ExpectedHash.CopyTo(buffer.AsSpan()[..HashLength]);
         BufferIO.WriteString(buffer.AsSpan()[HashLength..], this.Path, out _);
         return buffer;
     }

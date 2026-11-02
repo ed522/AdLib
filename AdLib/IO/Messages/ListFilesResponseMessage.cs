@@ -48,11 +48,14 @@ public class ListFilesResponseMessage : IMessage
 
         for (uint j = 0; j < fileCount; j++)
         {
+            bool isDirectory = buffer[index++] != 0;
             this.Files[j] = new FileEntry
             {
                 Name = BufferIO.ReadString(buffer[index..], out i),
-                IsDirectory = buffer[index++] != 0,
+                IsDirectory = isDirectory,
             };
+
+            index += i;
         }
     }
 }
