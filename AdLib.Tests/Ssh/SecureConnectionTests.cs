@@ -5,7 +5,7 @@ using static AdLib.IO.SecureConnectionUtils;
 
 namespace AdLib.Tests.Ssh;
 
-[NonParallelizable]
+[TestFixture, NonParallelizable]
 public class SecureConnectionTests : SecureCommsTestsBase
 {
     private readonly SemaphoreSlim _addressBindSemaphore = new(1, 1);
@@ -15,16 +15,16 @@ public class SecureConnectionTests : SecureCommsTestsBase
         Identity serverIdentity, TrustStore serverTrustStore
     )
     {
-        CancellationToken token = CancellationToken.None;
+        var token = CancellationToken.None;
         SecureClient client = new(clientIdentity, clientTrustStore);
         SecureServer server = new(serverIdentity, serverTrustStore);
         server.Start();
 
-        Task<ConnectionInfo> connectToServerTask = Task.Run(
+        var connectToServerTask = Task.Run(
             async () => await client.ConnectAsync(Host, token), token
         );
 
-        Task<ConnectionInfo> acceptClientTask = Task.Run(
+        var acceptClientTask = Task.Run(
             async () => await server.AcceptClientAsync(token), token
         );
 
@@ -47,12 +47,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.ClientIdentity, this.ClientTrustStore,
                 this.ServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo _, ConnectionInfo connectionToServer) = connections;
+            var (_, connectionToServer) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -78,12 +78,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.ClientIdentity, this.ClientTrustStore,
                 this.ServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo _, ConnectionInfo connectionToServer) = connections;
+            var (_, connectionToServer) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -116,12 +116,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.ClientIdentity, new TrustStore(),
                 this.UntrustedServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo connectionToClient, ConnectionInfo connectionToServer) = connections;
+            var (connectionToClient, connectionToServer) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -147,12 +147,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.ClientIdentity, this.ClientTrustStore,
                 this.UntrustedServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo connectionToClient, ConnectionInfo connectionToServer) = connections;
+            var (connectionToClient, connectionToServer) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -178,12 +178,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.ClientIdentity, this.ClientTrustStore,
                 this.ServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo connectionToClient, ConnectionInfo _) = connections;
+            var (connectionToClient, _) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -208,12 +208,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.ClientIdentity, this.ClientTrustStore,
                 this.ServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo connectionToClient, ConnectionInfo _) = connections;
+            var (connectionToClient, _) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -248,12 +248,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
 
         try
         {
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.UntrustedClientIdentity, this.ClientTrustStore,
                 this.ServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo connectionToClient, ConnectionInfo connectionToServer) = connections;
+            var (connectionToClient, connectionToServer) = connections;
 
             using (Assert.EnterMultipleScope())
             {
@@ -279,12 +279,12 @@ public class SecureConnectionTests : SecureCommsTestsBase
         try
         {
             // cannot reuse trust store since it gives the wrong error
-            using Connections connections = await ConnectHosts(
+            using var connections = await ConnectHosts(
                 this.UntrustedClientIdentity, new TrustStore(),
                 this.UntrustedServerIdentity, this.ServerTrustStore
             );
 
-            (ConnectionInfo connectionToClient, ConnectionInfo connectionToServer) = connections;
+            var (connectionToClient, connectionToServer) = connections;
 
             using (Assert.EnterMultipleScope())
             {
