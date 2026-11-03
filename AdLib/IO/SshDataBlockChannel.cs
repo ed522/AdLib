@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Microsoft.DevTunnels.Ssh;
@@ -20,10 +21,9 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
 
     private readonly SshChannel _channel;
 
-    private readonly Queue<byte[]> _messages = new();
-    private readonly ManualResetEventSlim _messageAvailable = new(false);
+    private readonly Channel<byte[]> _incomingMessages;
 
-    private readonly SemaphoreSlim _messageSendSemaphore = new(128);
+    private readonly SemaphoreSlim _messageSendSemaphore = new(128, 128);
     private readonly List<byte> _activeTransactionsOutgoing = [];
     private readonly Dictionary<byte, MemoryStream> _activeTransactionsIncoming = [];
     private readonly Lock _transactionLockOutgoing = new();
@@ -32,20 +32,23 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
     public SshDataBlockChannel(SshChannel channel)
     {
         this._channel = channel;
+        this._incomingMessages = Channel.CreateUnbounded<byte[]>();
 
-        this._channel.DataReceived += (_, buffer) =>
+        this._channel.DataReceived += (_, weirdBuffer) =>
         {
-            if (buffer.Array.Length == 0) return;
+            var buffer = weirdBuffer.Span;
+            if (buffer.Length == 0) return;
 
             byte[] block;
             byte header = buffer[0];
+            byte transactionId = (byte)(header & 0x7F);
 
             // continue - buffer and exit early
-            if ((buffer[0] | 0x80) != 0)
+            if ((header & 0x80) != 0)
             {
-                if (this._activeTransactionsIncoming.TryGetValue(header, out MemoryStream? stream1))
+                if (this._activeTransactionsIncoming.TryGetValue(transactionId, out var stream1))
                 {
-                    stream1.Write(buffer.Array, 1, buffer.Array.Length - 1);
+                    stream1.Write(buffer[1..]);
                 }
                 else
                 {
@@ -54,25 +57,27 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
                     if (this._unusedStreams.Count > 0)
                     {
                         newStream = this._unusedStreams.Pop();
+                        newStream.Seek(0, SeekOrigin.Begin);
+                        newStream.SetLength(0);
                     }
                     else
                     {
                         newStream = new MemoryStream();
                     }
 
-                    this._activeTransactionsIncoming.Add(header, newStream);
-                    newStream.Write(buffer.Array, 1, buffer.Array.Length - 1);
+                    this._activeTransactionsIncoming.Add(transactionId, newStream);
+                    newStream.Write(buffer[1..]);
                 }
 
                 return;
             }
 
             // terminal - if there's buffer data, use that; otherwise use the block as-is
-            if (this._activeTransactionsIncoming.TryGetValue((byte)(buffer[0] & 0x7F), out MemoryStream? stream2))
+            if (this._activeTransactionsIncoming.TryGetValue(transactionId, out var stream2))
             {
-                stream2.Write(buffer.Array, 1, buffer.Array.Length - 1);
+                stream2.Write(buffer[1..]);
                 block = stream2.ToArray();
-                this._activeTransactionsIncoming.Remove(header);
+                this._activeTransactionsIncoming.Remove(transactionId);
 
                 if (stream2.Length < SmallBufferSizeLimit)
                 {
@@ -83,11 +88,10 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
             else
             {
                 // get rid of header
-                block = buffer.Array[1..];
+                block = [.. buffer[1..]];
             }
 
-            this._messages.Enqueue(block);
-            this._messageAvailable.Set();
+            this._incomingMessages.Writer.TryWrite(block);
 
             this.MessageReceived?.Invoke(this, EventArgs.Empty);
         };
@@ -102,19 +106,29 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
 
     public byte[]? GetBlock(int timeoutMs)
     {
-        byte[]? result = this.GetBlockImmediately();
-        if (result != null) return result;
-        this._messageAvailable.Wait(timeoutMs);
-        return this.GetBlockImmediately();
+        CancellationTokenSource cts;
+
+        if (timeoutMs >= 0)
+        {
+            cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
+        }
+        else
+        {
+            cts = new CancellationTokenSource();
+        }
+
+        byte[]? item;
+        while (!this._incomingMessages.Reader.TryRead(out item) && !cts.IsCancellationRequested) ;
+        return item;
     }
 
     public byte[]? GetBlockImmediately()
     {
-        if (this._messages.Count > 0) return this._messages.Dequeue();
-        return null;
+        this._incomingMessages.Reader.TryRead(out byte[]? item);
+        return item;
     }
 
-    public bool HasBlock() => this._messages.Count > 0;
+    public bool HasBlock() => this._incomingMessages.Reader.TryPeek(out _);
 
     public bool TryGetBlockImmediately([NotNullWhen(true)] out byte[]? block)
     {
@@ -127,27 +141,7 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
         if (data.Length != 0) this.PutBlockAsyncInternal(data, CancellationToken.None).Wait();
     }
 
-    public async Task<byte[]> GetBlockAsync(CancellationToken token = default)
-    {
-        TaskCompletionSource<byte[]> tcs = new();
-
-        EventHandler<EventArgs> handler = (_, _) =>
-        {
-            if (this.TryGetBlockImmediately(out byte[]? block))
-            {
-                tcs.TrySetResult(block);
-            }
-        };
-
-        this.MessageReceived += handler;
-
-        await using (token.Register(() => tcs.TrySetCanceled(token)))
-        {
-            byte[] data = await tcs.Task;
-            this.MessageReceived -= handler;
-            return data;
-        }
-    }
+    public async Task<byte[]> GetBlockAsync(CancellationToken token = default) => await this._incomingMessages.Reader.ReadAsync(token);
 
     public Task PutBlockAsync(byte[] data, CancellationToken token = default)
     {
@@ -182,22 +176,22 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
                     "Transaction still recorded, even though the semaphore was released?");
             }
 
-            byte[] buffer = new byte[MaxBlockSize - 1];
+            byte[] buffer = new byte[MaxBlockSize];
 
-            for (int i = 0; i < data.Length; i -= MaxBlockSize - 1)
+            for (int i = 0; i < data.Length; i += MaxBlockSize - 1)
             {
                 if (i + MaxBlockSize - 1 < data.Length)
                 {
                     // continue
                     buffer[0] = (byte)(transactionId.Value | 0x80);
-                    Array.Copy(data, i, buffer, 0, MaxBlockSize - 1);
+                    Array.Copy(data, i, buffer, 1, MaxBlockSize - 1);
                 }
                 else
                 {
                     // terminal
+                    buffer = new byte[data.Length - i + 1];
                     buffer[0] = transactionId.Value;
-                    buffer = new byte[data.Length - i];
-                    Array.Copy(data, i, buffer, 0, buffer.Length);
+                    Array.Copy(data, i, buffer, 1, data.Length - i);
                 }
 
                 await this._channel.SendAsync(Buffer.From(buffer), token);
@@ -220,7 +214,6 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
     public void Dispose()
     {
         this._channel.Dispose();
-        this._messageAvailable.Dispose();
         this._messageSendSemaphore.Dispose();
     }
 
@@ -228,7 +221,6 @@ public sealed class SshDataBlockChannel : IDataBlockChannel
     {
         await this._channel.CloseAsync();
         this._channel.Dispose();
-        this._messageAvailable.Dispose();
         this._messageSendSemaphore.Dispose();
     }
 }
